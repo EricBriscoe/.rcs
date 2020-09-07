@@ -1,0 +1,5 @@
+export ZSH="~/.rcs/ohmyzsh"
+ZSH_THEME="robbyrussell"
+plugins=(git)
+ls $ZSH
+source $ZSH/oh-my-zsh.sh
