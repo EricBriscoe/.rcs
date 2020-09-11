@@ -1,41 +1,20 @@
-" https://github.com/VundleVim/Vundle.vim#about
-"  git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim
-set nocompatible
-filetype off
+call plug#begin('~/.vim/plugged')
 
-" set the runtime path to include Vundle and initialize
-set rtp+=~/.vim/bundle/Vundle.vim
-call vundle#begin()
-" alternatively, pass a path where Vundle should install plugins
-"call vundle#begin('~/some/path/here')
+" Plug 'valloric/youcompleteme'
+Plug 'kien/rainbow_parentheses.vim'
+Plug 'morhetz/gruvbox'
+Plug 'psf/black'
+Plug 'nathanaelkane/vim-indent-guides'
+Plug 'sheerun/vim-polyglot'
+Plug 'tpope/vim-fugitive'
+Plug 'airblade/vim-gitgutter'
+Plug 'liuchengxu/vim-which-key'
+Plug 'neoclide/coc.nvim'
 
-" let Vundle manage Vundle, required
-Plugin 'VundleVim/Vundle.vim'
-" Plugin 'valloric/youcompleteme'
-Plugin 'kien/rainbow_parentheses.vim'
-Plugin 'morhetz/gruvbox'
-Plugin 'psf/black'
-Plugin 'nathanaelkane/vim-indent-guides'
-Plugin 'sheerun/vim-polyglot'
-Plugin 'tpope/vim-fugitive'
-Plugin 'airblade/vim-gitgutter'
-Plugin 'liuchengxu/vim-which-key'
-Plugin 'neoclide/coc.nvim'
+" Initialize plugin system
+call plug#end()
 
-" All of your Plugins must be added before the following line
-call vundle#end()            " required
-filetype plugin indent on    " required
-" To ignore plugin indent changes, instead use:
-"filetype plugin on
-"
-" Brief help
-" :PluginList       - lists configured plugins
-" :PluginInstall    - installs plugins; append `!` to update or just :PluginUpdate
-" :PluginSearch foo - searches for foo; append `!` to refresh local cache
-" :PluginClean      - confirms removal of unused plugins; append `!` to auto-approve removal
-"
-" see :h vundle for more details or wiki for FAQ
-" Put your non-Plugin stuff after this line
+" Put your non-Plug stuff after this line
 
 set nu
 
