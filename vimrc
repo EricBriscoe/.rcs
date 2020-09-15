@@ -1,14 +1,14 @@
 call plug#begin('~/.vim/plugged')
 
 " Plug 'valloric/youcompleteme'
-Plug 'kien/rainbow_parentheses.vim'
+Plug 'tmhedberg/SimpylFold'
 Plug 'morhetz/gruvbox'
-Plug 'psf/black'
+Plug 'psf/black', {'branch': 'stable'}
 Plug 'nathanaelkane/vim-indent-guides'
 Plug 'sheerun/vim-polyglot'
 Plug 'tpope/vim-fugitive'
 Plug 'airblade/vim-gitgutter'
-Plug 'liuchengxu/vim-which-key'
+" Plug 'liuchengxu/vim-which-key'
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
 
 " Initialize plugin system
@@ -17,11 +17,7 @@ call plug#end()
 " Put your non-Plug stuff after this line
 
 set nu
-
-au VimEnter * RainbowParenthesesToggle
-au Syntax * RainbowParenthesesLoadRound
-au Syntax * RainbowParenthesesLoadSquare
-au Syntax * RainbowParenthesesLoadBraces
+let g:loaded_matchparen=1
 
 let g:gruvbox_invert_selection = 0
 let g:gruvbox_contrast_dark = 'soft'
@@ -30,7 +26,7 @@ let g:gruvbox_number_column = 'bg1'
 set termguicolors
 colorscheme gruvbox
 
-let g:black_skip_string_normalization = 0
+let g:black_skip_string_normalization = 1
 
 " coc.vim configuratino
 " TextEdit might fail if hidden is not set.
@@ -187,5 +183,8 @@ nnoremap <silent><nowait> <space>k  :<C-u>CocPrev<CR>
 " Resume latest coc list.
 nnoremap <silent><nowait> <space>p  :<C-u>CocListResume<CR>
 
+set t_ut=
+syntax on
+filetype indent plugin on
 " Load standard vimrc for convenience
 source ~/.vimrc
