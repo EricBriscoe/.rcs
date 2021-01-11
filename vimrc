@@ -1,6 +1,5 @@
 call plug#begin('~/.vim/plugged')
 
-" Plug 'valloric/youcompleteme'
 Plug 'tmhedberg/SimpylFold'
 Plug 'morhetz/gruvbox'
 Plug 'psf/black', {'branch': 'stable'}
