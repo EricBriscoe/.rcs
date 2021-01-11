@@ -26,6 +26,8 @@ colorscheme gruvbox
 
 let g:black_skip_string_normalization = 1
 
+" Hush nodejs version warning
+let g:coc_disable_startup_warning = 1
 " coc.vim configuratino
 " TextEdit might fail if hidden is not set.
 set hidden
