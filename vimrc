@@ -9,7 +9,7 @@ Plug 'sheerun/vim-polyglot'
 Plug 'tpope/vim-fugitive'
 Plug 'airblade/vim-gitgutter'
 Plug 'neoclide/coc.nvim', {'branch': 'master', 'do': 'yarn install --frozen-lockfile'}
-
+Plug 'vim-airline/vim-airline'
 " Initialize plugin system
 call plug#end()
 
