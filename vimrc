@@ -13,6 +13,14 @@ Plug 'liuchengxu/vim-which-key'
 " Initialize plugin system
 call plug#end()
 
+
+" F KEYS HERE
+" Run with python3
+autocmd FileType python map <buffer> <F1> :w<CR>:exec '!python3' shellescape(@%, 1)<CR>
+autocmd FileType python imap <buffer> <F1> <esc>:w<CR>:exec '!python3' shellescape(@%, 1)<CR>
+"
+" F KEYS HERE
+
 " Put your non-Plug stuff after this line
 set nu
 let g:loaded_matchparen=1
