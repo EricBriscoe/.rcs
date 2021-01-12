@@ -15,9 +15,15 @@ call plug#end()
 
 
 " F KEYS HERE
-" Run with python3
+" F1 Run with python3
 autocmd FileType python map <buffer> <F1> :w<CR>:exec '!python3' shellescape(@%, 1)<CR>
 autocmd FileType python imap <buffer> <F1> <esc>:w<CR>:exec '!python3' shellescape(@%, 1)<CR>
+" F2 Run with python2
+autocmd FileType python map <buffer> <F2> :w<CR>:exec '!python2' shellescape(@%, 1)<CR>
+autocmd FileType python imap <buffer> <F2> <esc>:w<CR>:exec '!python2' shellescape(@%, 1)<CR>
+" F3 Run with nosetests
+autocmd FileType python map <buffer> <F3> :w<CR>:exec '!nosetests' shellescape(@%, 1)<CR>
+autocmd FileType python imap <buffer> <F3> <esc>:w<CR>:exec '!nosetests' shellescape(@%, 1)<CR>
 "
 " F KEYS HERE
 
