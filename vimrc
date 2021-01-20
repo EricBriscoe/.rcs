@@ -22,8 +22,8 @@ autocmd FileType python imap <buffer> <F1> <esc>:w<CR>:exec '!python3' shellesca
 autocmd FileType python map <buffer> <F2> :w<CR>:exec '!python2' shellescape(@%, 1)<CR>
 autocmd FileType python imap <buffer> <F2> <esc>:w<CR>:exec '!python2' shellescape(@%, 1)<CR>
 " F3 Run with nosetests
-autocmd FileType python map <buffer> <F3> :w<CR>:exec '!nosetests' shellescape(@%, 1)<CR>
-autocmd FileType python imap <buffer> <F3> <esc>:w<CR>:exec '!nosetests' shellescape(@%, 1)<CR>
+autocmd FileType python map <buffer> <F3> :w<CR>:exec '!nosetests .'<CR>
+autocmd FileType python imap <buffer> <F3> <esc>:w<CR>:exec '!nosetests .'<CR>
 "
 " F KEYS HERE
 
