@@ -32,6 +32,10 @@ autocmd FileType python imap <buffer> <F3> <esc>:w<CR>:exec '!nosetests .'<CR>
 "
 " F KEYS HERE
 
+" FileType identification
+autocmd BufRead,BufNewFile *.sqli            set filetype=sql
+
+" ANYTHING AFTER THIS WAS COPIED ORIGINALLY
 " Put your non-Plug stuff after this line
 set nu
 let g:loaded_matchparen=1
