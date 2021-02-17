@@ -5,14 +5,19 @@ Plug 'morhetz/gruvbox'
 Plug 'psf/black', {'branch': 'stable'}
 Plug 'nathanaelkane/vim-indent-guides'
 Plug 'sheerun/vim-polyglot'
-Plug 'tpope/vim-fugitive'
-Plug 'airblade/vim-gitgutter'
+" Plug 'tpope/vim-fugitive'
+" Plug 'airblade/vim-gitgutter'
+Plug 'mhinz/vim-signify'
 Plug 'neoclide/coc.nvim', {'branch': 'master', 'do': 'yarn install --frozen-lockfile'}
 Plug 'vim-airline/vim-airline'
 Plug 'liuchengxu/vim-which-key'
+" Check out vim-signify at some point to replace fugitive and gitgutter maybe?
 " Initialize plugin system
 call plug#end()
 
+
+" default updatetime 4000ms is not good for async update for vim-signify
+set updatetime=100
 
 " F KEYS HERE
 " F1 Run with python3
