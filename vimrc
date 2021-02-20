@@ -1,5 +1,7 @@
 call plug#begin('~/.vim/plugged')
 
+Plug 'cstrahan/vim-capnp'
+Plug 'elzr/vim-json'
 Plug 'tmhedberg/SimpylFold'
 Plug 'morhetz/gruvbox'
 Plug 'psf/black', {'branch': 'stable'}
@@ -34,6 +36,7 @@ autocmd FileType python imap <buffer> <F3> <esc>:w<CR>:exec '!nosetests .'<CR>
 
 " FileType identification
 autocmd BufRead,BufNewFile *.sqli            set filetype=sql
+autocmd BufRead,BufNewFile *.bcd             set filetype=json
 
 " ANYTHING AFTER THIS WAS COPIED ORIGINALLY
 " Put your non-Plug stuff after this line
