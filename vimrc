@@ -8,12 +8,10 @@ Plug 'psf/black', {'branch': 'stable'}
 Plug 'nathanaelkane/vim-indent-guides'
 Plug 'sheerun/vim-polyglot'
 " Plug 'tpope/vim-fugitive'
-" Plug 'airblade/vim-gitgutter'
 Plug 'mhinz/vim-signify'
 Plug 'neoclide/coc.nvim', {'branch': 'master', 'do': 'yarn install --frozen-lockfile'}
 Plug 'vim-airline/vim-airline'
 Plug 'liuchengxu/vim-which-key'
-" Check out vim-signify at some point to replace fugitive and gitgutter maybe?
 " Initialize plugin system
 call plug#end()
 
@@ -21,7 +19,7 @@ call plug#end()
 " default updatetime 4000ms is not good for async update for vim-signify
 set updatetime=100
 
-" F KEYS HERE
+" >>>>>>>>>>>>>>F KEYS HERE
 " F1 Run with python3
 autocmd FileType python map <buffer> <F1> :w<CR>:exec '!python3' shellescape(@%, 1)<CR>
 autocmd FileType python imap <buffer> <F1> <esc>:w<CR>:exec '!python3' shellescape(@%, 1)<CR>
@@ -31,8 +29,8 @@ autocmd FileType python imap <buffer> <F2> <esc>:w<CR>:exec '!python2' shellesca
 " F3 Run with nosetests
 autocmd FileType python map <buffer> <F3> :w<CR>:exec '!nosetests .'<CR>
 autocmd FileType python imap <buffer> <F3> <esc>:w<CR>:exec '!nosetests .'<CR>
-"
-" F KEYS HERE
+" F4 used by tmux
+" >>>>>>>>>>>>>>F KEYS HERE
 
 " FileType identification
 autocmd BufRead,BufNewFile *.sqli            set filetype=sql
