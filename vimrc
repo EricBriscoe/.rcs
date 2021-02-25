@@ -7,7 +7,7 @@ Plug 'morhetz/gruvbox'
 Plug 'psf/black', {'branch': 'stable'}
 Plug 'nathanaelkane/vim-indent-guides'
 Plug 'sheerun/vim-polyglot'
-" Plug 'tpope/vim-fugitive'
+Plug 'tpope/vim-fugitive'
 Plug 'mhinz/vim-signify'
 Plug 'neoclide/coc.nvim', {'branch': 'master', 'do': 'yarn install --frozen-lockfile'}
 Plug 'vim-airline/vim-airline'
@@ -30,6 +30,10 @@ autocmd FileType python imap <buffer> <F2> <esc>:w<CR>:exec '!python2' shellesca
 autocmd FileType python map <buffer> <F3> :w<CR>:exec '!nosetests .'<CR>
 autocmd FileType python imap <buffer> <F3> <esc>:w<CR>:exec '!nosetests .'<CR>
 " F4 used by tmux
+" F5 Prev Tab
+map <F5> :tabp<CR>
+" F6 Next Tab
+map <F6> :tabn<CR>
 " >>>>>>>>>>>>>>F KEYS HERE
 
 " FileType identification
