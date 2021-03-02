@@ -27,6 +27,9 @@ autocmd BufWinEnter * silent NERDTreeMirror
 " Open NERDTree files in new tabs
 let NERDTreeCustomOpenArgs={'file':{'where': 't'}}
 
+" Mouse scroll cursor in vim
+set mouse=a
+
 " default updatetime 4000ms is not good for async update for vim-signify
 set updatetime=100
 
