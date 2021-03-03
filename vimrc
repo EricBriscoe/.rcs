@@ -1,22 +1,26 @@
 call plug#begin('~/.vim/plugged')
 
 Plug 'scrooloose/nerdtree'
-Plug 'cstrahan/vim-capnp'
-Plug 'elzr/vim-json'
+" Plug 'cstrahan/vim-capnp'
+" Plug 'elzr/vim-json'
 Plug 'tmhedberg/SimpylFold'
 Plug 'morhetz/gruvbox'
 Plug 'psf/black', {'branch': 'stable'}
 Plug 'nathanaelkane/vim-indent-guides'
 Plug 'sheerun/vim-polyglot'
-Plug 'tpope/vim-fugitive'
+" Plug 'tpope/vim-fugitive'
 Plug 'mhinz/vim-signify'
-Plug 'neoclide/coc.nvim', {'branch': 'master', 'do': 'yarn install --frozen-lockfile'}
-Plug 'vim-airline/vim-airline'
-Plug 'liuchengxu/vim-which-key'
+" Plug 'neoclide/coc.nvim', {'branch': 'release'}
+Plug 'neoclide/coc.nvim', {'branch': 'release', 'do': 'yarn install --frozen-lockfile'} " use this to build source
+Plug 'itchyny/lightline.vim'
+" Plug 'vim-airline/vim-airline'
+" Plug 'vim-airline/vim-airline-themes'
+" Plug 'liuchengxu/vim-which-key'
+Plug 'kien/ctrlp.vim'
 " Initialize plugin system
 call plug#end()
 
-" NERDTree config
+"===NERDTree config===
 " If another buffer tries to replace NERDTree, put it in the other window, and
 " bring back NERDTree.
 autocmd BufEnter * if bufname('#') =~ 'NERD_tree_\d\+' && bufname('%') !~ 'NERD_tree_\d\+' && winnr('$') > 1 |
@@ -26,14 +30,18 @@ let g:loaded_clipboard_provider = 0
 autocmd BufWinEnter * silent NERDTreeMirror
 " Open NERDTree files in new tabs
 let NERDTreeCustomOpenArgs={'file':{'where': 't'}}
+"===NERDTree config===
 
 " Mouse scroll cursor in vim
 set mouse=a
 
+"===Vim-Signify===
 " default updatetime 4000ms is not good for async update for vim-signify
 set updatetime=100
+"===Vim-Signify===
 
-" >>>>>>>>>>>>>>F KEYS HERE
+
+"===F KEYS HERE===
 " F1 Run with python3
 autocmd FileType python map <buffer> <F1> :w<CR>:exec '!python3' shellescape(@%, 1)<CR>
 autocmd FileType python imap <buffer> <F1> <esc>:w<CR>:exec '!python3' shellescape(@%, 1)<CR>
@@ -50,17 +58,39 @@ map <F5> :tabp<CR>
 map <F6> :tabn<CR>
 " F9 Open NERDTree
 map <F9> :NERDTreeToggle<CR>
-" >>>>>>>>>>>>>>F KEYS HERE
+" F10 Open ctrlp
+map <F10> :CtrlP<CR>
+"===F KEYS HERE===
 
-" FileType identification
+
+"===FileType Map===
 autocmd BufRead,BufNewFile *.sqli            set filetype=sql
 autocmd BufRead,BufNewFile *.bcd             set filetype=json
+"===FileType Map===
 
-" ANYTHING AFTER THIS WAS COPIED ORIGINALLY
-" Put your non-Plug stuff after this line
+
+"===Airline Config===
+let g:airline_powerline_fonts = 1
+let g:airline_theme = "deus"
+let g:airline#extensions#tabline#enabled = 1
+"===Airline Config===
+
+
+"===Coc.nvim config===
 set nu
 let g:loaded_matchparen=1
 
+" GoTo code navigation.
+nmap <silent> gd <Plug>(coc-definition)
+nmap <silent> gy <Plug>(coc-type-definition)
+nmap <silent> gi <Plug>(coc-implementation)
+nmap <silent> gr <Plug>(coc-references)
+
+
+"===Coc.nvim config===
+
+
+"===Gruvbox theming===
 let g:gruvbox_invert_selection = 0
 let g:gruvbox_contrast_dark = 'soft'
 let g:indent_guides_enable_on_vim_startup = 1
@@ -69,6 +99,16 @@ set termguicolors
 colorscheme gruvbox
 
 let g:black_skip_string_normalization = 1
+"===Gruvbox theming===
+
+" Match case insensitive unless capitals in search phrase
+set ignorecase
+set smartcase
+" search\C <- still case sensitive
+" Search\c <- case insensitive
+
+"===ANYTHING AFTER THIS WAS COPIED ORIGINALLY===
+" Put your non-Plug stuff after this line
 
 " Hush nodejs version warning
 let g:coc_disable_startup_warning = 1
@@ -181,25 +221,25 @@ nmap <leader>qf  <Plug>(coc-fix-current)
 
 " Map function and class text objects
 " NOTE: Requires 'textDocument.documentSymbol' support from the language server.
-xmap if <Plug>(coc-funcobj-i)
-omap if <Plug>(coc-funcobj-i)
-xmap af <Plug>(coc-funcobj-a)
-omap af <Plug>(coc-funcobj-a)
-xmap ic <Plug>(coc-classobj-i)
-omap ic <Plug>(coc-classobj-i)
-xmap ac <Plug>(coc-classobj-a)
-omap ac <Plug>(coc-classobj-a)
+" xmap if <Plug>(coc-funcobj-i)
+" omap if <Plug>(coc-funcobj-i)
+" xmap af <Plug>(coc-funcobj-a)
+" omap af <Plug>(coc-funcobj-a)
+" xmap ic <Plug>(coc-classobj-i)
+" omap ic <Plug>(coc-classobj-i)
+" xmap ac <Plug>(coc-classobj-a)
+" omap ac <Plug>(coc-classobj-a)
 
 " Use CTRL-S for selections ranges.
 " Requires 'textDocument/selectionRange' support of language server.
-nmap <silent> <C-s> <Plug>(coc-range-select)
-xmap <silent> <C-s> <Plug>(coc-range-select)
+" nmap <silent> <C-s> <Plug>(coc-range-select)
+" xmap <silent> <C-s> <Plug>(coc-range-select)
 
 " Add `:Format` command to format current buffer.
-command! -nargs=0 Format :call CocAction('format')
+" command! -nargs=0 Format :call CocAction('format')
 
 " Add `:Fold` command to fold current buffer.
-command! -nargs=? Fold :call     CocAction('fold', <f-args>)
+" command! -nargs=? Fold :call     CocAction('fold', <f-args>)
 
 " Add `:OR` command for organize imports of the current buffer.
 command! -nargs=0 OR   :call     CocAction('runCommand', 'editor.action.organizeImport')
@@ -207,7 +247,7 @@ command! -nargs=0 OR   :call     CocAction('runCommand', 'editor.action.organize
 " Add (Neo)Vim's native statusline support.
 " NOTE: Please see `:h coc-status` for integrations with external plugins that
 " provide custom statusline: lightline.vim, vim-airline.
-set statusline^=%{coc#status()}%{get(b:,'coc_current_function','')}
+" set statusline^=%{coc#status()}%{get(b:,'coc_current_function','')}
 
 " Mappings for CoCList
 " Show all diagnostics.
