@@ -69,11 +69,11 @@ autocmd BufRead,BufNewFile *.bcd             set filetype=json
 "===FileType Map===
 
 
-"===Airline Config===
-let g:airline_powerline_fonts = 1
-let g:airline_theme = "deus"
-let g:airline#extensions#tabline#enabled = 1
-"===Airline Config===
+"===Lightline Config===
+let g:lightline = {
+    \ 'colorscheme': 'wombat',
+    \ }
+"===Lightline Config===
 
 
 "===Coc.nvim config===
