@@ -13,10 +13,11 @@ Plug 'mhinz/vim-signify'
 " Plug 'neoclide/coc.nvim', {'branch': 'release'}
 Plug 'neoclide/coc.nvim', {'branch': 'release', 'do': 'yarn install --frozen-lockfile'} " use this to build source
 Plug 'itchyny/lightline.vim'
+Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
 " Plug 'vim-airline/vim-airline'
 " Plug 'vim-airline/vim-airline-themes'
 " Plug 'liuchengxu/vim-which-key'
-Plug 'kien/ctrlp.vim'
+" Plug 'kien/ctrlp.vim'
 " Initialize plugin system
 call plug#end()
 
@@ -41,7 +42,7 @@ set updatetime=100
 "===Vim-Signify===
 
 
-"===F KEYS HERE===
+"===KEYBINDSS HERE===
 " F1 Run with python3
 autocmd FileType python map <buffer> <F1> :w<CR>:exec '!python3' shellescape(@%, 1)<CR>
 autocmd FileType python imap <buffer> <F1> <esc>:w<CR>:exec '!python3' shellescape(@%, 1)<CR>
@@ -58,9 +59,9 @@ map <F5> :tabp<CR>
 map <F6> :tabn<CR>
 " F9 Open NERDTree
 map <F9> :NERDTreeToggle<CR>
-" F10 Open ctrlp
-map <F10> :CtrlP<CR>
-"===F KEYS HERE===
+" Ctrl-p open FZF
+nnoremap <C-t> :FZF<CR>
+"===KEYBINDSS HERE===
 
 
 "===FileType Map===
