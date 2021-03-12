@@ -1,7 +1,7 @@
 call plug#begin('~/.vim/plugged')
 
 Plug 'scrooloose/nerdtree'
-" Plug 'cstrahan/vim-capnp'
+Plug 'cstrahan/vim-capnp'
 " Plug 'elzr/vim-json'
 Plug 'tmhedberg/SimpylFold'
 Plug 'morhetz/gruvbox'
