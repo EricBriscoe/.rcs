@@ -1,6 +1,6 @@
 export ZSH="$HOME/.rcs/ohmyzsh"
 ZSH_THEME="../../powerlevel10k/powerlevel10k"
-plugins=(git vi-mode virtualenvwrapper)
+plugins=(git vi-mode)
 
 VI_MODE_SET_CURSOR=true
 
