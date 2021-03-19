@@ -86,7 +86,7 @@ let g:lightline = {
 
 "===Coc.nvim config===
 set nu
-let g:loaded_matchparen=1
+"let g:loaded_matchparen=1
 
 " GoTo code navigation.
 nmap <silent> gd <Plug>(coc-definition)
