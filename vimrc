@@ -35,6 +35,8 @@ let NERDTreeCustomOpenArgs={'file':{'where': 't'}}
 
 " Mouse scroll cursor in vim
 set mouse=a
+set nowrap
+set foldmethod=syntax
 
 "===Vim-Signify===
 " default updatetime 4000ms is not good for async update for vim-signify
