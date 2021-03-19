@@ -1,6 +1,7 @@
 call plug#begin('~/.vim/plugged')
 
 Plug 'scrooloose/nerdtree'
+Plug 'scrooloose/nerdcommenter'
 Plug 'cstrahan/vim-capnp'
 " Plug 'elzr/vim-json'
 Plug 'tmhedberg/SimpylFold'
@@ -32,6 +33,10 @@ autocmd BufWinEnter * silent NERDTreeMirror
 " Open NERDTree files in new tabs
 let NERDTreeCustomOpenArgs={'file':{'where': 't'}}
 "===NERDTree config===
+
+
+"===NERDComment config===
+"===NERDComment config===
 
 " Mouse scroll cursor in vim
 set mouse=a
