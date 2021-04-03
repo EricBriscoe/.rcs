@@ -7,6 +7,7 @@ VI_MODE_SET_CURSOR=true
 source $ZSH/oh-my-zsh.sh
 
 alias tmux='tmux -2'
+alias qgrep='grep --line-buffered --color=never -r "" * | fzf'
 
 function sv() {
     source venv/bin/activate &&
