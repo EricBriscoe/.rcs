@@ -1,6 +1,7 @@
+" This is no longer maintained, init.lua has more up to date stuff
+
 call plug#begin('~/.vim/plugged')
 
-Plug 'scrooloose/nerdtree'
 Plug 'scrooloose/nerdcommenter'
 Plug 'cstrahan/vim-capnp'
 " Plug 'elzr/vim-json'
@@ -21,19 +22,6 @@ Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
 " Plug 'kien/ctrlp.vim'
 " Initialize plugin system
 call plug#end()
-
-"===NERDTree config===
-" If another buffer tries to replace NERDTree, put it in the other window, and
-" bring back NERDTree.
-autocmd BufEnter * if bufname('#') =~ 'NERD_tree_\d\+' && bufname('%') !~ 'NERD_tree_\d\+' && winnr('$') > 1 |
-    \ let buf=bufnr() | buffer# | execute "normal! \<C-W>w" | execute 'buffer'.buf | endif
-let g:loaded_clipboard_provider = 0
-" Open the existing NERDTree on each new tab.
-autocmd BufWinEnter * silent NERDTreeMirror
-" Open NERDTree files in new tabs
-let NERDTreeCustomOpenArgs={'file':{'where': 't'}}
-"===NERDTree config===
-
 
 "===NERDComment config===
 "===NERDComment config===
@@ -64,8 +52,6 @@ autocmd FileType python imap <buffer> <F3> <esc>:w<CR>:exec '!nosetests .'<CR>
 map <F5> :tabp<CR>
 " F6 Next Tab
 map <F6> :tabn<CR>
-" F9 Open NERDTree
-map <F9> :NERDTreeToggle<CR>
 " Ctrl-p open FZF
 nnoremap <C-t> :FZF<CR>
 "===KEYBINDSS HERE===
