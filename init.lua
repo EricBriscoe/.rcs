@@ -23,6 +23,8 @@ cmd 'set foldmethod=syntax'
 cmd 'filetype plugin on'
 cmd 'set nu'
 cmd 'filetype plugin on'
+cmd 'set ignorecase' -- This'll only be case sensitive matching
+cmd 'set smartcase'  -- when capitals are in the search
 -- NVIM SETTINGS --
 
 
@@ -45,6 +47,7 @@ paq 'tpope/vim-fugitive'
 paq 'vim-airline/vim-airline'
 paq 'liuchengxu/vim-which-key'
 paq 'preservim/nerdcommenter'
+paq 'airblade/vim-gitgutter'
 -- PLUGINS --
 
 
@@ -92,6 +95,10 @@ local ts = require 'nvim-treesitter.configs'
 ts.setup {ensure_installed = 'python', highlight = {enabled = true}}
 -- TREESITTER --
 
+-- NERDCommenter --
+cmd 'let g:NERDCreateDefaultMappings = 0'
+-- NERDCommenter --
+
 
 -- KEYBINDS --
 g.mapleader = ' '
@@ -101,10 +108,15 @@ map('i', '<Tab>', 'pumvisible() ? "\\<C-n>" : "\\<Tab>"', {expr = true})
 -- f keys
 map('n', '<F9>', ':tabp<CR>')
 map('n', '<F10>', ':tabn<CR>')
+map('i', '<F12>', 'from pdb import set_trace; set_trace()')
 -- code navigation
 map('n', '<leader>gd', '<cmd>lua vim.lsp.buf.definition()<CR>')
 -- git
 map('n', '<leader>gb', 'Git blame<CR>')
 -- Which Key
 map('n', '<leader>', ':WhichKey " "<CR>', { silent = true })
+-- FZF
+map('n', '<C-t>', ':Files<CR>')
+-- NERDCommenter
+map('n', '<leader>/', ':call NERDComment(",", "toggle")<CR>')
 -- KEYBINDS --
