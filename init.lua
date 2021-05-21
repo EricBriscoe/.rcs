@@ -16,6 +16,7 @@ local function map(mode, lhs, rhs, opts)
 end
 -- HELPERS --
 
+
 -- NVIM SETTINGS --
 cmd 'set mouse=a'
 cmd 'set nowrap'
@@ -37,6 +38,11 @@ paq {'junegunn/fzf', run=fn['fzf#install']}
 paq 'junegunn/fzf.vim'
 paq 'ojroques/nvim-lspfuzzy'
 paq 'morhetz/gruvbox'
+paq 'tmhedberg/SimpylFold'
+paq 'psf/black'
+paq 'nathanaelkane/vim-indent-guides'
+paq 'tpope/vim-fugitive'
+paq 'vim-airline/vim-airline'
 -- PLUGINS --
 
 
@@ -54,6 +60,7 @@ g['deoplete#enable_at_startup'] = 1
 
 -- LSP --
 local lsp = require 'lspconfig'
+lsp.ccls.setup {}
 lsp.pyls.setup {
 	root_dir = lsp.util.root_pattern('.git', fn.getcwd()),
 	settings = {
@@ -85,9 +92,15 @@ ts.setup {ensure_installed = 'python', highlight = {enabled = true}}
 
 
 -- KEYBINDS --
-g.mapleader = '\\' --this is the default but its a helpful reminder
+g.mapleader = ' '
 -- autocomplete
 map('i', '<S-Tab>', 'pumvisible() ? "\\<C-p>" : "\\<Tab>"', {expr = true})
 map('i', '<Tab>', 'pumvisible() ? "\\<C-n>" : "\\<Tab>"', {expr = true})
 -- f keys
+map('n', '<F9>', ':tabp<CR>')
+map('n', '<F10>', ':tabn<CR>')
+-- code navigation
+map('n', '<leader>gd', '<cmd>lua vim.lsp.buf.definition()<CR>')
+-- git
+map('n', '<leader>gb', 'Git blame<CR>')
 -- KEYBINDS --
