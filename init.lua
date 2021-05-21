@@ -16,13 +16,13 @@ local function map(mode, lhs, rhs, opts)
 end
 -- HELPERS --
 
-
 -- NVIM SETTINGS --
 cmd 'set mouse=a'
 cmd 'set nowrap'
 cmd 'set foldmethod=syntax'
 cmd 'filetype plugin on'
 cmd 'set nu'
+cmd 'filetype plugin on'
 -- NVIM SETTINGS --
 
 
@@ -43,6 +43,8 @@ paq 'psf/black'
 paq 'nathanaelkane/vim-indent-guides'
 paq 'tpope/vim-fugitive'
 paq 'vim-airline/vim-airline'
+paq 'liuchengxu/vim-which-key'
+paq 'preservim/nerdcommenter'
 -- PLUGINS --
 
 
@@ -103,4 +105,6 @@ map('n', '<F10>', ':tabn<CR>')
 map('n', '<leader>gd', '<cmd>lua vim.lsp.buf.definition()<CR>')
 -- git
 map('n', '<leader>gb', 'Git blame<CR>')
+-- Which Key
+map('n', '<leader>', ':WhichKey " "<CR>', { silent = true })
 -- KEYBINDS --
