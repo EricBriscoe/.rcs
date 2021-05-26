@@ -122,6 +122,6 @@ map('n', '<leader>', ':WhichKey " "<CR>', { silent = true })
 map('n', '<C-t>', ':Files<CR>')
 -- NERDCommenter
 map('n', '<leader>/', ':call NERDComment(",", "toggle")<CR>')
--- Close terminal with escape
-map('t', '<Esc>', '<C-\\><C-n><cmd>FloatermToggle<CR>')
+-- Kill terminal with escape
+map('t', '<Esc>', '<C-\\><C-n><cmd>FloatermKill<CR>')
 -- KEYBINDS --
