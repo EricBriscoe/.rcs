@@ -48,6 +48,7 @@ paq 'vim-airline/vim-airline'
 paq 'liuchengxu/vim-which-key'
 paq 'preservim/nerdcommenter'
 paq 'airblade/vim-gitgutter'
+paq 'voldikss/vim-floaterm'
 -- PLUGINS --
 
 
@@ -108,7 +109,9 @@ map('i', '<Tab>', 'pumvisible() ? "\\<C-n>" : "\\<Tab>"', {expr = true})
 -- f keys
 map('n', '<F9>', ':tabp<CR>')
 map('n', '<F10>', ':tabn<CR>')
-map('i', '<F12>', 'from pdb import set_trace; set_trace()')
+map('n', '<F12>', '<cmd>FloatermToggle<CR>')
+map('i', '<F12>', '<cmd>FloatermToggle<CR>')
+map('t', '<F12>', '<C-\\><C-n><cmd>FloatermToggle<CR>')
 -- code navigation
 map('n', '<leader>d', '<cmd>lua vim.lsp.buf.definition()<CR>')
 -- git
@@ -119,4 +122,6 @@ map('n', '<leader>', ':WhichKey " "<CR>', { silent = true })
 map('n', '<C-t>', ':Files<CR>')
 -- NERDCommenter
 map('n', '<leader>/', ':call NERDComment(",", "toggle")<CR>')
+-- Close terminal with escape
+map('t', '<Esc>', '<C-\\><C-n><cmd>FloatermToggle<CR>')
 -- KEYBINDS --
