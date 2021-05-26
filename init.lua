@@ -110,7 +110,7 @@ map('n', '<F9>', ':tabp<CR>')
 map('n', '<F10>', ':tabn<CR>')
 map('i', '<F12>', 'from pdb import set_trace; set_trace()')
 -- code navigation
-map('n', '<leader>gd', '<cmd>lua vim.lsp.buf.definition()<CR>')
+map('n', '<leader>d', '<cmd>lua vim.lsp.buf.definition()<CR>')
 -- git
 map('n', '<leader>gb', 'Git blame<CR>')
 -- Which Key
