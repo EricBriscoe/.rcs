@@ -84,6 +84,7 @@ lsp.pyls.setup {
 		}
 	}
 }
+lsp.rome.setup{}
 -- LSP --
 
 -- LSP FUZZY --
