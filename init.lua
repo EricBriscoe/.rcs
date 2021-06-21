@@ -26,7 +26,7 @@ cmd 'filetype plugin on'
 cmd 'set ignorecase' -- This'll only be case sensitive matching
 cmd 'set smartcase'  -- when capitals are in the search
 cmd 'let g:python3_host_prog = "~/.rcs/nvim/bin/python"'
-cmd 'autocmd BufNewFile,BufRead *.sqli set syntax=json'
+cmd 'autocmd BufNewFile,BufRead *.sqli set syntax=sql'
 -- NVIM SETTINGS --
 
 
