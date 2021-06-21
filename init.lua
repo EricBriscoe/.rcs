@@ -25,6 +25,8 @@ cmd 'set nu'
 cmd 'filetype plugin on'
 cmd 'set ignorecase' -- This'll only be case sensitive matching
 cmd 'set smartcase'  -- when capitals are in the search
+cmd 'let g:python3_host_prog = "~/.rcs/nvim/bin/python"'
+cmd 'autocmd BufNewFile,BufRead *.sqli set syntax=json'
 -- NVIM SETTINGS --
 
 
@@ -67,6 +69,9 @@ g['deoplete#enable_at_startup'] = 1
 -- LSP --
 local lsp = require 'lspconfig'
 lsp.ccls.setup {}
+--lsp.jedi_language_server.setup{
+	--root_dir = lsp.util.root_pattern('.git', fn.getcwd())
+--}
 lsp.pyls.setup {
 	root_dir = lsp.util.root_pattern('.git', fn.getcwd()),
 	settings = {
@@ -84,7 +89,6 @@ lsp.pyls.setup {
 		}
 	}
 }
-lsp.rome.setup{}
 -- LSP --
 
 -- LSP FUZZY --
@@ -98,7 +102,7 @@ ts.setup {ensure_installed = 'python', highlight = {enabled = true}}
 -- TREESITTER --
 
 -- NERDCommenter --
-cmd 'let g:NERDCreateDefaultMappings = 0'
+cmd 'let g:NERDCreateDefaultMappings = 1'
 -- NERDCommenter --
 
 
