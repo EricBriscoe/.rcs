@@ -54,7 +54,6 @@ paq 'voldikss/vim-floaterm'
 -- PLUGINS --
 
 -- AIRLINE --
-cmd 'let g:airline#extensions#tabline#enabled = 1'
 -- AIRLINE --
 
 -- GRUVBOX --
