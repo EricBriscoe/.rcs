@@ -36,7 +36,7 @@ local paq = require('paq-nvim').paq
 paq{'savq/paq-nvim', opt=true}
 paq 'shougo/deoplete-lsp'
 paq {'shougo/deoplete.nvim', run=fn['remote#host#UpdateRemotePlugins']}
--- paq 'nvim-treesitter/nvim-treesitter'
+paq 'nvim-treesitter/nvim-treesitter'
 paq 'neovim/nvim-lspconfig'
 paq {'junegunn/fzf', run=fn['fzf#install']}
 paq 'junegunn/fzf.vim'
@@ -51,6 +51,7 @@ paq 'liuchengxu/vim-which-key'
 paq 'preservim/nerdcommenter'
 paq 'airblade/vim-gitgutter'
 paq 'voldikss/vim-floaterm'
+paq 'Vimjas/vim-python-pep8-indent'
 -- PLUGINS --
 
 -- AIRLINE --
