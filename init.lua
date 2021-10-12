@@ -53,6 +53,7 @@ paq 'preservim/nerdcommenter'
 paq 'airblade/vim-gitgutter'
 paq 'voldikss/vim-floaterm'
 paq 'Vimjas/vim-python-pep8-indent'
+paq 'ekalinin/Dockerfile.vim'
 -- PLUGINS --
 
 -- AIRLINE --
