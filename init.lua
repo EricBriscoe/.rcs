@@ -28,6 +28,7 @@ cmd 'set smartcase'  -- when capitals are in the search
 cmd 'let g:python3_host_prog = "~/.rcs/nvim/bin/python"'
 cmd 'autocmd BufNewFile,BufRead *.sqli set syntax=sql'
 cmd 'autocmd FileType yaml setlocal ts=2 sts=2 sw=2 expandtab'
+cmd 'autocmd FileType sql setlocal ts=2 sts=2 sw=2 expandtab'
 -- NVIM SETTINGS --
 
 
