@@ -31,6 +31,9 @@ cmd 'set expandtab'
 cmd 'autocmd BufNewFile,BufRead *.sqli set syntax=sql'
 cmd 'autocmd FileType yaml setlocal ts=2 sts=2 sw=2 expandtab'
 cmd 'autocmd FileType sql setlocal ts=2 sts=2 sw=2 expandtab'
+cmd 'set cursorline'
+cmd 'set colorcolumn=80,120'
+cmd 'highlight ColorColumn ctermbg=lightgrey'
 -- NVIM SETTINGS --
 
 
