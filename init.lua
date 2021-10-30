@@ -22,7 +22,6 @@ cmd 'set nowrap'
 cmd 'set foldmethod=syntax'
 cmd 'filetype plugin on'
 cmd 'set nu'
-cmd 'filetype plugin on'
 cmd 'set ignorecase' -- This'll only be case sensitive matching
 cmd 'set smartcase'  -- when capitals are in the search
 cmd 'let g:python3_host_prog = "~/.rcs/nvim/bin/python"'
