@@ -38,25 +38,25 @@ cmd 'highlight ColorColumn ctermbg=lightgrey'
 
 
 -- PLUGINS --
-vim.cmd 'packadd paq-nvim' -- loads the package manager
-local paq = require('paq-nvim').paq
-paq{'savq/paq-nvim', opt=true}
-paq 'github/copilot.vim'
-paq {'junegunn/fzf', run=fn['fzf#install']}
-paq 'junegunn/fzf.vim'
-paq 'ojroques/nvim-lspfuzzy'
-paq 'morhetz/gruvbox'
-paq 'tmhedberg/SimpylFold'
-paq 'psf/black'
-paq 'nathanaelkane/vim-indent-guides'
-paq 'tpope/vim-fugitive'
-paq 'vim-airline/vim-airline'
-paq 'liuchengxu/vim-which-key'
-paq 'preservim/nerdcommenter'
-paq 'airblade/vim-gitgutter'
-paq 'voldikss/vim-floaterm'
-paq 'Vimjas/vim-python-pep8-indent'
-paq 'ekalinin/Dockerfile.vim'
+require "paq" {
+  {'savq/paq-nvim', opt=true};
+  'github/copilot.vim';
+  {'junegunn/fzf', run=fn['fzf#install']};
+  'junegunn/fzf.vim';
+  'ojroques/nvim-lspfuzzy';
+  'morhetz/gruvbox';
+  'tmhedberg/SimpylFold';
+  'psf/black';
+  'nathanaelkane/vim-indent-guides';
+  'tpope/vim-fugitive';
+  'vim-airline/vim-airline';
+  'liuchengxu/vim-which-key';
+  'preservim/nerdcommenter';
+  'airblade/vim-gitgutter';
+  'voldikss/vim-floaterm';
+  'Vimjas/vim-python-pep8-indent';
+  'ekalinin/Dockerfile.vim';
+}
 -- PLUGINS --
 
 -- AIRLINE --
