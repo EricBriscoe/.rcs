@@ -25,8 +25,8 @@ cmd 'set nu'
 cmd 'set ignorecase' -- This'll only be case sensitive matching
 cmd 'set smartcase'  -- when capitals are in the search
 cmd 'let g:python3_host_prog = "~/.rcs/nvim/bin/python"'
-cmd 'set tabstop=4'
-cmd 'set shiftwidth=4'
+cmd 'set tabstop=2'
+cmd 'set shiftwidth=2'
 cmd 'set expandtab'
 cmd 'autocmd BufNewFile,BufRead *.sqli set syntax=sql'
 cmd 'autocmd FileType yaml setlocal ts=2 sts=2 sw=2 expandtab'
@@ -41,10 +41,7 @@ cmd 'highlight ColorColumn ctermbg=lightgrey'
 vim.cmd 'packadd paq-nvim' -- loads the package manager
 local paq = require('paq-nvim').paq
 paq{'savq/paq-nvim', opt=true}
-paq 'shougo/deoplete-lsp'
-paq {'shougo/deoplete.nvim', run=fn['remote#host#UpdateRemotePlugins']}
-paq 'nvim-treesitter/nvim-treesitter'
-paq 'neovim/nvim-lspconfig'
+paq 'github/copilot.vim'
 paq {'junegunn/fzf', run=fn['fzf#install']}
 paq 'junegunn/fzf.vim'
 paq 'ojroques/nvim-lspfuzzy'
@@ -73,49 +70,9 @@ cmd 'set termguicolors'
 cmd 'colorscheme gruvbox'
 -- GRUVBOX --
 
--- DEOPLETE --
-g['deoplete#enable_at_startup'] = 1
--- DEOPLETE --
-
--- LSP --
-local lsp = require'lspconfig'
-lsp.ccls.setup {}
---lsp.jedi_language_server.setup{
-	--root_dir = lsp.util.root_pattern('.git', fn.getcwd())
---}
-lsp.pylsp.setup {
-	root_dir = lsp.util.root_pattern('.git', fn.getcwd()),
-	settings = {
-		pyls = {
-			configurationSources = {'flake8'},
-			plugins = {
-				flake8 = {enabled = true},
-				pycodestyle = {enabled = false},
-				pylint = {enabled = false},
-				pydocstyle = {enabled = false},
-				pyflakes = {enabled = false},
-				mccabe = {enabled = false},
-				yapf = {enabled = false},
-			}
-		}
-	}
-}
--- LSP --
-
--- LSP FUZZY --
-local lspfuzzy = require 'lspfuzzy'
-lspfuzzy.setup {}
--- LSP FUZZY --
-
--- TREESITTER --
-local ts = require 'nvim-treesitter.configs'
-ts.setup {ensure_installed = 'python', highlight = {enabled = true}}
--- TREESITTER --
-
 -- NERDCommenter --
 cmd 'let g:NERDCreateDefaultMappings = 1'
 -- NERDCommenter --
-
 
 -- KEYBINDS --
 g.mapleader = ' '
