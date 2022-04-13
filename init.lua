@@ -40,7 +40,12 @@ cmd 'highlight ColorColumn ctermbg=lightgrey'
 -- PLUGINS --
 require "paq" {
   {'savq/paq-nvim', opt=true};
-  'github/copilot.vim';
+  if vim.env.USER == 'ebriscoe' then
+    'Shougo/deoplete.nvim';
+    'deoplete-plugins/deoplete-jedi';
+  else
+    'github/copilot.vim';
+  end;
   {'junegunn/fzf', run=fn['fzf#install']};
   'junegunn/fzf.vim';
   'ojroques/nvim-lspfuzzy';
