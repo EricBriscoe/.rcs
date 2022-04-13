@@ -40,12 +40,6 @@ cmd 'highlight ColorColumn ctermbg=lightgrey'
 -- PLUGINS --
 require "paq" {
   {'savq/paq-nvim', opt=true};
-  if vim.env.USER == 'ebriscoe' then
-    'Shougo/deoplete.nvim';
-    'deoplete-plugins/deoplete-jedi';
-  else
-    'github/copilot.vim';
-  end;
   {'junegunn/fzf', run=fn['fzf#install']};
   'junegunn/fzf.vim';
   'ojroques/nvim-lspfuzzy';
@@ -62,6 +56,16 @@ require "paq" {
   'Vimjas/vim-python-pep8-indent';
   'ekalinin/Dockerfile.vim';
 }
+if vim.env.USER == 'ebriscoe' then
+  require "paq"{
+    'Shougo/deoplete-python';
+    'deoplete-plugins/deoplete-jedi';
+  }
+else
+  require "paq"{
+    'github/copilot.vim';
+  }
+end
 -- PLUGINS --
 
 -- AIRLINE --
