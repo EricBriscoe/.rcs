@@ -64,6 +64,10 @@ require "paq"{
 -- AIRLINE --
 -- AIRLINE --
 
+-- DEOPLETE --
+g['deoplete#enable_at_startup'] = 1
+-- DEOPLETE --
+
 -- GRUVBOX --
 g['gruvbox_invert_selection'] = 0
 g['gruvbox_contrast_dark'] = 'soft'
