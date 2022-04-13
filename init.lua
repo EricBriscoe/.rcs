@@ -39,10 +39,11 @@ cmd 'highlight ColorColumn ctermbg=lightgrey'
 
 -- PLUGINS --
 require "paq"{
-  'savq/paq-nvim',
-  {'junegunn/fzf', run=fn['fzf#install']},
-  'junegunn/fzf.vim',
-  'Shougo/deoplete.nvim',
+  'savq/paq-nvim';
+  {'junegunn/fzf', run=fn['fzf#install']};
+  'junegunn/fzf.vim';
+  'Shougo/deoplete.nvim';
+  {'tbodt/deoplete-tabnine', run='./install.sh'};
   'deoplete-plugins/deoplete-jedi';
   'github/copilot.vim';
   'ojroques/nvim-lspfuzzy';
