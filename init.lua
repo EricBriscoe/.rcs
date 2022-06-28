@@ -66,7 +66,7 @@ require "paq"{
 -- AIRLINE --
 
 -- DEOPLETE --
-g['deoplete#enable_at_startup'] = 1
+g['deoplete#enable_at_startup'] = 0
 -- DEOPLETE --
 
 -- GRUVBOX --
