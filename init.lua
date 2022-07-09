@@ -43,9 +43,9 @@ require "paq"{
   {'junegunn/fzf', run=fn['fzf#install']};
   'junegunn/fzf.vim';
   'Shougo/deoplete.nvim';
-  {'tbodt/deoplete-tabnine', run='./install.sh'};
+  --{'tbodt/deoplete-tabnine', run='./install.sh'};
   'deoplete-plugins/deoplete-jedi';
-  'github/copilot.vim';
+  --'github/copilot.vim';
   'ojroques/nvim-lspfuzzy';
   'morhetz/gruvbox';
   'tmhedberg/SimpylFold';
@@ -66,7 +66,7 @@ require "paq"{
 -- AIRLINE --
 
 -- DEOPLETE --
-g['deoplete#enable_at_startup'] = 0
+g['deoplete#enable_at_startup'] = 1
 -- DEOPLETE --
 
 -- GRUVBOX --
@@ -101,7 +101,7 @@ map('n', '<leader>', ':WhichKey " "<CR>', { silent = true })
 -- FZF
 map('n', '<C-t>', ':Files<CR>')
 -- NERDCommenter
-map('n', '<leader>/', ':call NERDComment(",", "toggle")<CR>')
+map('n', '<leader>/', ':call nerdcommenter#Comment(",", "toggle")<CR>')
 -- Kill terminal with escape
 map('t', '<Esc>', '<C-\\><C-n><cmd>FloatermKill<CR>')
 -- KEYBINDS --
