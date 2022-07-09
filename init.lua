@@ -91,7 +91,6 @@ map('i', '<Tab>', 'pumvisible() ? "\\<C-n>" : "\\<Tab>"', {expr = true})
 map('n', '<F9>', ':tabp<CR>')
 map('n', '<F10>', ':tabn<CR>')
 map('n', '<F12>', '<cmd>FloatermToggle<CR>')
-map('i', '<F12>', '<cmd>FloatermToggle<CR>')
 map('t', '<F12>', '<C-\\><C-n><cmd>FloatermToggle<CR>')
 -- code navigation
 map('n', '<leader>d', '<cmd>lua vim.lsp.buf.definition()<CR>')
