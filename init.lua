@@ -59,6 +59,7 @@ require "paq"{
   'voldikss/vim-floaterm';
   'Vimjas/vim-python-pep8-indent';
   'ekalinin/Dockerfile.vim';
+  'sheerun/vim-polyglot';
 }
 -- PLUGINS --
 
