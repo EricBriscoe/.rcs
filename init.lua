@@ -60,6 +60,7 @@ require "paq"{
   'Vimjas/vim-python-pep8-indent';
   'ekalinin/Dockerfile.vim';
   'sheerun/vim-polyglot';
+  'nvie/vim-flake8';
 }
 -- PLUGINS --
 
