@@ -34,38 +34,45 @@ cmd 'autocmd FileType sql setlocal ts=2 sts=2 sw=2 expandtab'
 cmd 'set cursorline'
 cmd 'set colorcolumn=80,120'
 cmd 'highlight ColorColumn ctermbg=lightgrey'
+cmd 'set termguicolors'
 -- NVIM SETTINGS --
 
 
 -- PLUGINS --
 require "paq"{
-  'savq/paq-nvim';
-  {'junegunn/fzf', run=fn['fzf#install']};
-  'junegunn/fzf.vim';
   'Shougo/deoplete.nvim';
-  --{'tbodt/deoplete-tabnine', run='./install.sh'};
+  'Vimjas/vim-python-pep8-indent';
+  'airblade/vim-gitgutter';
   'deoplete-plugins/deoplete-jedi';
-  --'github/copilot.vim';
-  'ojroques/nvim-lspfuzzy';
+  'ekalinin/Dockerfile.vim';
+  'junegunn/fzf.vim';
+  'liuchengxu/vim-which-key';
   'morhetz/gruvbox';
-  'tmhedberg/SimpylFold';
-  'psf/black';
   'nathanaelkane/vim-indent-guides';
+  'nvie/vim-flake8';
+  'ojroques/nvim-lspfuzzy';
+  'preservim/nerdcommenter';
+  'psf/black';
+  'savq/paq-nvim';
+  'sheerun/vim-polyglot';
+  'tmhedberg/SimpylFold';
   'tpope/vim-fugitive';
   'vim-airline/vim-airline';
-  'liuchengxu/vim-which-key';
-  'preservim/nerdcommenter';
-  'airblade/vim-gitgutter';
   'voldikss/vim-floaterm';
-  'Vimjas/vim-python-pep8-indent';
-  'ekalinin/Dockerfile.vim';
-  'sheerun/vim-polyglot';
-  'nvie/vim-flake8';
+  'yuttie/comfortable-motion.vim';
+  --'github/copilot.vim';
+  --{'tbodt/deoplete-tabnine', run='./install.sh'};
+  {'junegunn/fzf', run=fn['fzf#install']};
 }
 -- PLUGINS --
 
 -- AIRLINE --
 -- AIRLINE --
+
+-- COMFORTABLE MOTION --
+g['comfortable_motion_scroll_down_key'] = "j"
+g['comfortable_motion_scroll_up_key'] = "k"
+-- COMFORTABLE MOTION --
 
 -- DEOPLETE --
 g['deoplete#enable_at_startup'] = 1
@@ -73,9 +80,9 @@ g['deoplete#enable_at_startup'] = 1
 
 -- GRUVBOX --
 g['gruvbox_invert_selection'] = 0
-g['gruvbox_contrast_dark'] = 'soft'
-g['indent_guides_enable_on_vim_startup'] = 1
-cmd 'set termguicolors'
+g['gruvbox_contrast_dark'] = 'hard'
+g['indent_guides_enable_on_vim_startup']= 1
+g['gruvbox_transparent_bg'] = 1
 cmd 'colorscheme gruvbox'
 -- GRUVBOX --
 
