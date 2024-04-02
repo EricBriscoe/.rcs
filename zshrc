@@ -102,6 +102,8 @@ source $ZSH/oh-my-zsh.sh
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
+eval "$(zoxide init zsh)"
+
 # Download Znap, if it's not there yet.
 [[ -r ~/Repos/znap/znap.zsh ]] ||
     git clone --depth 1 -- \
@@ -111,5 +113,3 @@ source ~/Repos/znap/znap.zsh  # Start Znap
 znap source marlonrichert/zsh-autocomplete
 
 source $HOME/.cargo/env
-
-eval "$(zoxide init zsh)"
