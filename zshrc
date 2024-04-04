@@ -102,7 +102,7 @@ source $ZSH/oh-my-zsh.sh
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
-if command -v > /dev/null 2>&1; then
+if command -v zoxide > /dev/null 2>&1; then
     eval "$(zoxide init zsh)"
     alias cd=z
 fi
