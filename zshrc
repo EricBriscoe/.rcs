@@ -102,6 +102,9 @@ source $ZSH/oh-my-zsh.sh
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
-eval "$(zoxide init zsh)"
+if command -v > /dev/null 2>&1; then
+    eval "$(zoxide init zsh)"
+    alias cd=z
+fi
 
 source $HOME/.cargo/env
