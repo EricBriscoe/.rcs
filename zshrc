@@ -109,7 +109,7 @@ fi
 
 source $HOME/.cargo/env
 
-function t() {
+function tm() {
     if [ -z "$TMUX"]; then
         if tmux list-sessions &> /dev/null; then
             tmux attach
