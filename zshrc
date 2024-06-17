@@ -108,3 +108,15 @@ if command -v zoxide > /dev/null 2>&1; then
 fi
 
 source $HOME/.cargo/env
+
+function t() {
+    if [ -z "$TMUX"]; then
+        if tmux list-sessions &> /dev/null; then
+            tmux attach
+        else
+            tmux new-session
+        fi
+    else
+        tmux detach
+    fi
+}
