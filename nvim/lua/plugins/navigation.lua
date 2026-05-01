@@ -135,10 +135,18 @@ local function branch_changed_files()
     "bat --color=always --style=numbers --line-range=:200 -- {} 2>/dev/null || sed -n '1,200p' {}",
   }, " ; ")
 
-  require("fzf-lua").fzf_exec(files, {
+  local fzf = require("fzf-lua")
+
+  fzf.fzf_exec(files, {
     cwd = root,
     preview = preview,
     prompt = "Branch files> ",
+    actions = {
+      ["default"] = fzf.actions.file_edit_or_qf,
+      ["ctrl-s"] = fzf.actions.file_split,
+      ["ctrl-v"] = fzf.actions.file_vsplit,
+      ["ctrl-t"] = fzf.actions.file_tabedit,
+    },
   })
 end
 
