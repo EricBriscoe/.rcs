@@ -42,6 +42,11 @@ say "Installing virtualenvwrapper + lodas venv"
 if [[ ! -x /opt/homebrew/bin/virtualenvwrapper.sh ]]; then
   /opt/homebrew/bin/pip3 install --break-system-packages virtualenvwrapper
 fi
+
+say "Installing neovim-remote (nvr) for opening files into a parent nvim"
+if ! command -v nvr >/dev/null 2>&1; then
+  /opt/homebrew/bin/pip3 install --break-system-packages neovim-remote
+fi
 export WORKON_HOME="$HOME/.venvs"
 # shellcheck disable=SC1091
 source /opt/homebrew/bin/virtualenvwrapper.sh
