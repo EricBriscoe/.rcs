@@ -61,6 +61,7 @@ return {
         { "<leader>c", group = "code" },
         { "<leader>d", group = "diagnostics" },
         { "<leader>f", group = "format" },
+        { "<leader>g", group = "git" },
         { "<leader>r", group = "rename" },
         { "<leader>s", group = "search" },
         { "<leader>t", group = "terminal" },

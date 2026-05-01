@@ -53,6 +53,7 @@ init.lua                     -- entrypoint
 lua/config/lazy.lua          -- bootstraps lazy.nvim
 lua/config/options.lua       -- editor options + diagnostics
 lua/config/terminal.lua      -- floating terminal toggle
+lua/plugins/git.lua          -- gitsigns
 lua/plugins/language.lua     -- LSP, completion, format, lint
 lua/plugins/navigation.lua   -- fzf-lua pickers
 lazy-lock.json               -- pinned plugin commits
@@ -68,6 +69,7 @@ Plugins (all via `lazy.nvim`):
 - `conform.nvim` — format on save
 - `nvim-lint` — async linting
 - `fzf-lua` — files / grep / buffers / etc.
+- `gitsigns.nvim` — gutter signs, hunk staging, blame
 
 Mason installs:
 
@@ -96,6 +98,12 @@ Keymaps worth remembering (leader = space):
 | `K` / `gd` / `gr` / `gi` / `gD` | hover / def / refs / impl / decl |
 | `<space>rn` / `<space>ca` | rename / code action |
 | `]d` / `[d` | next / prev diagnostic |
+| `]c` / `[c` | next / prev git hunk |
+| `<space>gs` / `<space>gr` | stage / reset hunk (works in visual too) |
+| `<space>gS` / `<space>gR` | stage / reset whole buffer |
+| `<space>gp` | preview hunk |
+| `<space>gb` / `<space>gB` | blame line / toggle inline blame |
+| `<space>gd` / `<space>gD` | diff against index / last commit |
 
 ### `keyboards/`
 `id80_ansi_layout_mine.json` — VIA layout for my id80. Not part of the shell/editor setup, just parked here.
