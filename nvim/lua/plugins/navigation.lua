@@ -87,17 +87,17 @@ local function mainline_ref(root)
   end
 end
 
-local function branch_changed_files()
+local function changed_files_list()
   local root = current_git_root()
   if not root then
     vim.notify("Not inside a Git worktree", vim.log.levels.WARN)
-    return
+    return nil
   end
 
   local base = mainline_ref(root)
   if not base then
     vim.notify("Could not find origin/main, upstream/main, main, or master", vim.log.levels.WARN)
-    return
+    return nil
   end
 
   local files = {}
@@ -121,6 +121,59 @@ local function branch_changed_files()
   append({ "diff", "--name-only", "--diff-filter=ACMR", "--cached" })
   append({ "diff", "--name-only", "--diff-filter=ACMR" })
   append({ "ls-files", "--others", "--exclude-standard" })
+
+  return root, base, files
+end
+
+local function file_open_in_any_tab(path)
+  for _, tabnr in ipairs(vim.api.nvim_list_tabpages()) do
+    for _, winnr in ipairs(vim.api.nvim_tabpage_list_wins(tabnr)) do
+      if vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(winnr)) == path then
+        return true
+      end
+    end
+  end
+  return false
+end
+
+local function open_branch_files_in_tabs()
+  local root, base, files = changed_files_list()
+  if not root then
+    return
+  end
+
+  if #files == 0 then
+    vim.notify("No files changed against " .. base, vim.log.levels.INFO)
+    return
+  end
+
+  local opened = 0
+  for _, file in ipairs(files) do
+    local path = root .. "/" .. file
+    if not file_open_in_any_tab(path) then
+      vim.cmd("tabnew " .. vim.fn.fnameescape(path))
+      opened = opened + 1
+    end
+  end
+
+  if opened == 0 then
+    vim.notify("All " .. #files .. " changed files already have tabs", vim.log.levels.INFO)
+  end
+end
+
+vim.api.nvim_create_user_command("Olc", open_branch_files_in_tabs, {
+  desc = "Open each branch-changed file in its own tab",
+})
+
+-- vim user commands must be uppercase; alias :olc -> :Olc when typed as a
+-- full command so the lowercase form (matching the zsh function) works too.
+vim.cmd([[cnoreabbrev <expr> olc (getcmdtype() == ':' && getcmdline() ==# 'olc') ? 'Olc' : 'olc']])
+
+local function branch_changed_files()
+  local root, base, files = changed_files_list()
+  if not root then
+    return
+  end
 
   if #files == 0 then
     vim.notify("No files changed against " .. base, vim.log.levels.INFO)
