@@ -39,3 +39,6 @@ line_position = leading
 
 [sqlfluff:layout:type:comma]
 line_position = trailing
+
+[sqlfluff:rules:aliasing.table]
+aliasing = implicit
