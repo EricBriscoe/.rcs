@@ -208,6 +208,15 @@ lodas_wt_up () {
 }
 export PATH="$HOME/.local/bin:$PATH"
 
+# Inside nvim's :terminal, $NVIM is the parent's RPC socket. Send file opens
+# back to it instead of nesting a new nvim, and make $EDITOR (git commit etc.)
+# do the same.
+if [[ -n $NVIM ]] && command -v nvr >/dev/null 2>&1; then
+  alias nvim='nvr -s'
+  export EDITOR='nvr --remote-wait'
+  export VISUAL=$EDITOR
+fi
+
 test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell_integration.zsh"
 
 export CCS_DROID_PATH="/Users/eric/.local/bin/droid"

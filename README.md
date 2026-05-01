@@ -16,6 +16,7 @@ cd ~/dev/.rcs
 - installs oh-my-zsh (skipped if already present)
 - runs the fzf installer to wire up `ctrl+t` / `ctrl+r` / completion (writes `~/.fzf.zsh`)
 - installs `virtualenvwrapper` and creates the `lodas` venv
+- installs `neovim-remote` (`nvr`) so files opened from inside `:terminal` go to the parent nvim
 - symlinks `~/.zshrc`, `~/.tmux.conf` and `~/.config/nvim` into this repo
 
 Optional bits that the zshrc sources only when present: iTerm2 shell integration, Docker CLI completions, the `droid` CLI.
@@ -31,6 +32,7 @@ oh-my-zsh with `robbyrussell` and the `git` plugin. Beyond that:
 - adds `$HOME/.local/bin` and the `lodas` repo to `PYTHONPATH`
 - `compinit` cached to once per day
 - sources `fnm`, `zoxide`, `fzf`, iTerm2 integration, Docker completions when present
+- when running inside nvim's `:terminal` (`$NVIM` set), aliases `nvim` to `nvr -s` and points `EDITOR` / `VISUAL` at `nvr --remote-wait` so child processes (like `git commit`) edit in the parent nvim instead of nesting
 
 Functions and aliases:
 
