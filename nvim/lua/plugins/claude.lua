@@ -1,4 +1,5 @@
 local envs_dir = vim.fn.expand("~/.claude/envs")
+local state_file = vim.fn.stdpath("state") .. "/claude-account"
 
 local function list_accounts()
   if vim.fn.isdirectory(envs_dir) == 0 then
@@ -8,6 +9,29 @@ local function list_accounts()
   return vim.fn.readdir(envs_dir, function(name)
     return vim.fn.isdirectory(envs_dir .. "/" .. name) == 1 and 1 or 0
   end)
+end
+
+local function read_state()
+  local f = io.open(state_file, "r")
+  if not f then
+    return nil
+  end
+  local name = f:read("l")
+  f:close()
+  if name == nil or name == "" then
+    return nil
+  end
+  return name
+end
+
+local function write_state(name)
+  vim.fn.mkdir(vim.fn.fnamemodify(state_file, ":h"), "p")
+  local f = io.open(state_file, "w")
+  if not f then
+    return
+  end
+  f:write(name)
+  f:close()
 end
 
 local function set_account(name)
@@ -24,7 +48,19 @@ local function set_account(name)
   pcall(function()
     require("claudecode").stop()
   end)
+  write_state(name)
   vim.notify("Claude account: " .. name)
+end
+
+local function restore_account()
+  local name = read_state()
+  if not name then
+    return
+  end
+  if not vim.tbl_contains(list_accounts(), name) then
+    return
+  end
+  vim.env.CLAUDE_CONFIG_DIR = envs_dir .. "/" .. name
 end
 
 return {
@@ -59,6 +95,8 @@ return {
           return list_accounts()
         end,
       })
+
+      restore_account()
     end,
   },
 }
