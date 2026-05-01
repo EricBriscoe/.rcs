@@ -61,7 +61,13 @@ olc() {
   echo "$files" | xargs code
 }
 alias lsql='docker exec -it lodas_db psql -U realto -d realto'
-alias docker-nuke='read -q "REPLY?Nuke ALL containers, images, volumes, and build cache? [y/N] " && echo && docker stop $(docker ps -aq) 2>/dev/null; docker system prune -af --volumes && docker buildx prune -af'
+cleandocker () {
+  read -q "REPLY?Nuke ALL Docker containers, images, volumes, networks, and build cache? [y/N] " || return
+  echo
+  docker rm -f $(docker ps -aq) 2>/dev/null
+  docker system prune -af --volumes
+  docker buildx prune -af
+}
 
 eval "$(zoxide init zsh)"
 
