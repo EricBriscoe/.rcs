@@ -16,7 +16,7 @@ cd ~/dev/.rcs
 - installs oh-my-zsh (skipped if already present)
 - runs the fzf installer to wire up `ctrl+t` / `ctrl+r` / completion (writes `~/.fzf.zsh`)
 - installs `virtualenvwrapper` and creates the `lodas` venv
-- symlinks `~/.zshrc`, `~/.tmux.conf` and `~/.config/nvim` into this repo
+- symlinks `~/.zshrc`, `~/.tmux.conf`, `~/.config/nvim`, and `~/.config/sqlfluff` into this repo
 
 Optional bits that the zshrc sources only when present: iTerm2 shell integration, Docker CLI completions, the `droid` CLI.
 
@@ -115,6 +115,9 @@ Keymaps worth remembering (leader = space):
 | `<space>aa` / `<space>ar` | accept / reject Claude's proposed diff |
 | `<space>D` | toggle DB UI (auto-targets current worktree's Postgres) |
 | `:olc` (or `:Olc`) | open each branch-changed file in its own tab (idempotent — skips files already open) |
+
+### `sqlfluff/`
+Global `sqlfluff` config (Postgres dialect). UPPER keywords / literals / functions / types, snake_case identifiers, 4-space indent, trailing commas, leading `AND`/`OR`. Line length is unenforced. Project-local `.sqlfluff` files override this.
 
 ### `keyboards/`
 `id80_ansi_layout_mine.json` — VIA layout for my id80. Not part of the shell/editor setup, just parked here.
