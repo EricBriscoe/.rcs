@@ -31,13 +31,25 @@ local function format_enabled(bufnr)
     markdown = true,
     python = true,
     sh = true,
+    sql = true,
     terraform = true,
     tf = true,
     typescript = true,
     typescriptreact = true,
   }
 
-  return filetypes[vim.bo[bufnr].filetype] == true
+  if not filetypes[vim.bo[bufnr].filetype] then
+    return false
+  end
+
+  -- LODAS deltas are append-only history; never reformat them.
+  if vim.bo[bufnr].filetype == "sql" then
+    if vim.api.nvim_buf_get_name(bufnr):match("/db/deltas/") then
+      return false
+    end
+  end
+
+  return true
 end
 
 local function format_on_save(bufnr)
@@ -122,7 +134,7 @@ return {
         "marksman",
         "shellcheck",
         "shfmt",
-        "sqls",
+        "sqlfluff",
         "stylua",
         "terraform-ls",
         "tflint",
@@ -269,7 +281,6 @@ return {
         "lua_ls",
         "marksman",
         "ruff",
-        "sqls",
         "terraformls",
         "tflint",
         "vtsls",
@@ -311,6 +322,7 @@ return {
         markdown = { "injected" },
         python = { "ruff_fix", "ruff_format" },
         sh = { "shfmt" },
+        sql = { "sqlfluff" },
         terraform = { "terraform_fmt" },
         tf = { "terraform_fmt" },
         typescript = { "biome" },
@@ -333,6 +345,11 @@ return {
         shfmt = {
           prepend_args = { "-i", "4", "-ci" },
         },
+        sqlfluff = {
+          command = "sqlfluff",
+          args = { "format", "--disable-progress-bar", "--nocolor", "--dialect=postgres", "-" },
+          stdin = true,
+        },
       },
     },
   },
@@ -344,8 +361,17 @@ return {
 
       lint.linters_by_ft = {
         sh = { "shellcheck" },
+        sql = { "sqlfluff" },
         terraform = { "tflint" },
         tf = { "tflint" },
+      }
+
+      -- nvim-lint defaults sqlfluff to ANSI dialect; LODAS is Postgres 15.
+      lint.linters.sqlfluff.args = {
+        "lint",
+        "--format=json",
+        "--dialect=postgres",
+        "-",
       }
 
       vim.api.nvim_create_autocmd({ "BufReadPost", "BufWritePost", "InsertLeave" }, {

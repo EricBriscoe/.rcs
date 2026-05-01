@@ -57,6 +57,7 @@ lua/plugins/claude.lua       -- claudecode.nvim + account switching
 lua/plugins/git.lua          -- gitsigns
 lua/plugins/language.lua     -- LSP, completion, format, lint
 lua/plugins/navigation.lua   -- fzf-lua pickers
+lua/plugins/sql.lua          -- vim-dadbod-ui with worktree-aware connections
 lazy-lock.json               -- pinned plugin commits
 ```
 
@@ -72,16 +73,17 @@ Plugins (all via `lazy.nvim`):
 - `fzf-lua` — files / grep / buffers / etc.
 - `gitsigns.nvim` — gutter signs, hunk staging, blame
 - `claudecode.nvim` (+ `snacks.nvim`) — Claude Code IDE integration: send selections / buffers as context, accept/reject AI diffs as native nvim ops
+- `vim-dadbod` + `vim-dadbod-ui` — query runner / schema browser; the connection auto-targets the current worktree's Postgres container (reads `DB_HOST_PORT` from the worktree's `.env`)
 
 Mason installs:
 
-- **LSPs:** bashls, basedpyright, docker-compose-ls, dockerls, jsonls, lua_ls, marksman, sqls, terraform-ls, tflint, vtsls, yamlls
-- **Formatters:** shfmt, stylua, biome (TS/JS/CSS/JSON), ruff (Python), terraform fmt
-- **Linters:** actionlint, shellcheck, tflint
+- **LSPs:** bashls, basedpyright, docker-compose-ls, dockerls, jsonls, lua_ls, marksman, terraform-ls, tflint, vtsls, yamlls
+- **Formatters:** shfmt, stylua, biome (TS/JS/CSS/JSON), ruff (Python), sqlfluff (SQL, Postgres dialect), terraform fmt
+- **Linters:** actionlint, shellcheck, sqlfluff (Postgres dialect), tflint
 
 Notable behaviour:
 
-- format on save for bash/css/js(x)/json(c)/lua/markdown/python/sh/terraform/ts(x). Toggle per-buffer with `<leader>uf`, globally with `:lua vim.g.disable_autoformat = true`
+- format on save for bash/css/js(x)/json(c)/lua/markdown/python/sh/sql/terraform/ts(x). Toggle per-buffer with `<leader>uf`, globally with `:lua vim.g.disable_autoformat = true`. SQL files under `db/deltas/` are exempt — those are append-only history.
 - `actionlint` runs automatically on `.github/workflows/*.yml`
 - LSPs prefer LODAS-local binaries when present: `~/dev/lodas/node_modules/.bin/biome`, `~/.venvs/lodas/bin/{python,ruff}`. Falls back to `$PATH` otherwise.
 - `:ClaudeAccount <name>` flips `CLAUDE_CONFIG_DIR` mid-session, tab-completing from `~/.claude/envs/`. The choice is written to `stdpath("state")/claude-account` and restored on the next nvim launch. If that directory doesn't exist, the command is a no-op and Claude runs at the default `~/.claude`.
@@ -111,6 +113,7 @@ Keymaps worth remembering (leader = space):
 | `<space>af` | focus Claude pane |
 | `<space>as` | send selection / current buffer to Claude (also in visual mode) |
 | `<space>aa` / `<space>ar` | accept / reject Claude's proposed diff |
+| `<space>D` | toggle DB UI (auto-targets current worktree's Postgres) |
 
 ### `keyboards/`
 `id80_ansi_layout_mine.json` — VIA layout for my id80. Not part of the shell/editor setup, just parked here.
