@@ -40,7 +40,7 @@ Functions and aliases:
 - `cwt`: clean the current worktree and bounce back to the main repo with the right venv
 - `work_wt_up`: `tilt down` → `work ci` → `tilt up --all`
 - `lsql`: psql into the local WORK Postgres container
-- `docker-nuke`: confirms, then wipes every container/image/volume/build cache
+- `cleandocker`: confirms, then force-removes every container and prunes every image, volume, network, and build cache
 - `claude-work` / `claude-personal`: `claude` with a per-account `CLAUDE_CONFIG_DIR`
 
 ### `tmux.conf`
