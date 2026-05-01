@@ -346,7 +346,7 @@ return {
         },
         sqlfluff = {
           command = "sqlfluff",
-          args = { "format", "--disable-progress-bar", "--nocolor", "--dialect=postgres", "-" },
+          args = { "fix", "--disable-progress-bar", "--nocolor", "--dialect=postgres", "-" },
           stdin = true,
         },
       },
