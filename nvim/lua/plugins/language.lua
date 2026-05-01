@@ -70,7 +70,6 @@ return {
     opts = {
       preset = "modern",
       spec = {
-        { "<leader>a", group = "ai/claude" },
         { "<leader>c", group = "code" },
         { "<leader>d", group = "diagnostics" },
         { "<leader>f", group = "format" },
