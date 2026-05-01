@@ -24,8 +24,7 @@ say "Installing Homebrew packages"
 brew install \
   fnm zoxide fzf \
   neovim ripgrep fd bat \
-  git tmux node \
-  python python@3.12 pipx
+  git tmux node python
 
 say "Installing oh-my-zsh"
 if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
@@ -43,11 +42,6 @@ say "Installing virtualenvwrapper + lodas venv"
 if [[ ! -x /opt/homebrew/bin/virtualenvwrapper.sh ]]; then
   /opt/homebrew/bin/pip3 install --break-system-packages virtualenvwrapper
 fi
-
-say "Installing neovim-remote (nvr) into its own pipx venv on python3.12"
-# pynvim is broken on Python 3.14 right now, so pin nvr to 3.12. pipx writes
-# to ~/.local/bin, which the zshrc already prepends to PATH.
-pipx install --force --python /opt/homebrew/bin/python3.12 neovim-remote
 export WORKON_HOME="$HOME/.venvs"
 # shellcheck disable=SC1091
 source /opt/homebrew/bin/virtualenvwrapper.sh
