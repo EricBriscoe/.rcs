@@ -51,9 +51,10 @@ fi
 
 say "Linking dotfiles into \$HOME (replacing anything in the way)"
 mkdir -p "$HOME/.config"
-rm -rf "$HOME/.zshrc" "$HOME/.tmux.conf" "$HOME/.config/nvim"
+rm -rf "$HOME/.zshrc" "$HOME/.tmux.conf" "$HOME/.config/nvim" "$HOME/.config/sqlfluff"
 ln -s "$REPO/zshrc"     "$HOME/.zshrc"
 ln -s "$REPO/tmux.conf" "$HOME/.tmux.conf"
 ln -s "$REPO/nvim"      "$HOME/.config/nvim"
+ln -s "$REPO/sqlfluff"  "$HOME/.config/sqlfluff"
 
 say "Done. Open a new shell. nvim's first launch will bootstrap lazy.nvim + Mason."

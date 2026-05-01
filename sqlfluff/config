@@ -1,0 +1,41 @@
+# Global sqlfluff config. Active wherever sqlfluff runs unless a
+# project-local .sqlfluff overrides it.
+#
+# Style: UPPER keywords + literals + functions + types, snake_case
+# identifiers, 4-space indent, trailing commas, leading AND/OR, no
+# enforced line length (long INSERT VALUES rows are fine).
+
+[sqlfluff]
+dialect = postgres
+templater = raw
+exclude_rules = LT05
+max_line_length = 0
+large_file_skip_byte_limit = 200000
+
+[sqlfluff:indentation]
+tab_space_size = 4
+indent_unit = space
+indented_using_on = true
+indented_on_contents = true
+indented_then = true
+
+[sqlfluff:rules:capitalisation.keywords]
+capitalisation_policy = upper
+
+[sqlfluff:rules:capitalisation.identifiers]
+extended_capitalisation_policy = lower
+
+[sqlfluff:rules:capitalisation.functions]
+extended_capitalisation_policy = upper
+
+[sqlfluff:rules:capitalisation.literals]
+capitalisation_policy = upper
+
+[sqlfluff:rules:capitalisation.types]
+extended_capitalisation_policy = upper
+
+[sqlfluff:layout:type:binary_operator]
+line_position = leading
+
+[sqlfluff:layout:type:comma]
+line_position = trailing
