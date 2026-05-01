@@ -114,6 +114,7 @@ Keymaps worth remembering (leader = space):
 | `<space>as` | send selection / current buffer to Claude (also in visual mode) |
 | `<space>aa` / `<space>ar` | accept / reject Claude's proposed diff |
 | `<space>D` | toggle DB UI (auto-targets current worktree's Postgres) |
+| `:olc` (or `:Olc`) | open each branch-changed file in its own tab (idempotent — skips files already open) |
 
 ### `keyboards/`
 `id80_ansi_layout_mine.json` — VIA layout for my id80. Not part of the shell/editor setup, just parked here.
