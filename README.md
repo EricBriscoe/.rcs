@@ -32,7 +32,7 @@ oh-my-zsh with `robbyrussell` and the `git` plugin. Beyond that:
 - adds `$HOME/.local/bin` and the `lodas` repo to `PYTHONPATH`
 - `compinit` cached to once per day
 - sources `fnm`, `zoxide`, `fzf`, iTerm2 integration, Docker completions when present
-- when running inside nvim's `:terminal` (`$NVIM` set), aliases `nvim` to `nvr -s` and points `EDITOR` / `VISUAL` at `nvr --remote-wait` so child processes (like `git commit`) edit in the parent nvim instead of nesting
+- wraps `nvim` with a function that reuses one running instance across terminals: inside `:terminal` it routes to the parent, in any other shell it routes to a nvim listening on `~/.cache/nvim/server.sock`, falling back to spawning a fresh nvim that listens there. `EDITOR` / `VISUAL` point at `nvr --remote-wait` so `git commit` etc. edit in the running nvim too. To bypass, use `command nvim`.
 
 Functions and aliases:
 

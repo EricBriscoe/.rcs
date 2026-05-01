@@ -208,11 +208,32 @@ lodas_wt_up () {
 }
 export PATH="$HOME/.local/bin:$PATH"
 
-# Inside nvim's :terminal, $NVIM is the parent's RPC socket. Send file opens
-# back to it instead of nesting a new nvim, and make $EDITOR (git commit etc.)
-# do the same.
-if [[ -n $NVIM ]] && command -v nvr >/dev/null 2>&1; then
-  alias nvim='nvr -s'
+# Reuse one running nvim across terminals whenever possible:
+#   - inside nvim's :terminal ($NVIM set) -> route to the parent
+#   - external terminal with a live server on the well-known socket -> route there
+#   - otherwise -> spawn a fresh nvim that listens on that socket so the
+#     next terminal can route to it
+if command -v nvr >/dev/null 2>&1; then
+  export NVIM_LISTEN_ADDRESS="$HOME/.cache/nvim/server.sock"
+
+  nvim() {
+    mkdir -p "$(dirname "$NVIM_LISTEN_ADDRESS")"
+
+    if [[ -n $NVIM ]]; then
+      nvr -s "$@"
+      return
+    fi
+
+    if [[ -S $NVIM_LISTEN_ADDRESS ]] \
+       && nvr --servername "$NVIM_LISTEN_ADDRESS" --nostart -s "$@" 2>/dev/null; then
+      return
+    fi
+
+    # Stale socket from a crashed nvim, or none at all.
+    [[ -e $NVIM_LISTEN_ADDRESS ]] && rm -f "$NVIM_LISTEN_ADDRESS"
+    command nvim --listen "$NVIM_LISTEN_ADDRESS" "$@"
+  }
+
   export EDITOR='nvr --remote-wait'
   export VISUAL=$EDITOR
 fi
