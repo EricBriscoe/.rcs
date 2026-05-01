@@ -53,6 +53,7 @@ init.lua                     -- entrypoint
 lua/config/lazy.lua          -- bootstraps lazy.nvim
 lua/config/options.lua       -- editor options + diagnostics
 lua/config/terminal.lua      -- floating terminal toggle
+lua/plugins/claude.lua       -- claudecode.nvim + account switching
 lua/plugins/git.lua          -- gitsigns
 lua/plugins/language.lua     -- LSP, completion, format, lint
 lua/plugins/navigation.lua   -- fzf-lua pickers
@@ -70,6 +71,7 @@ Plugins (all via `lazy.nvim`):
 - `nvim-lint` — async linting
 - `fzf-lua` — files / grep / buffers / etc.
 - `gitsigns.nvim` — gutter signs, hunk staging, blame
+- `claudecode.nvim` (+ `snacks.nvim`) — Claude Code IDE integration: send selections / buffers as context, accept/reject AI diffs as native nvim ops
 
 Mason installs:
 
@@ -82,6 +84,7 @@ Notable behaviour:
 - format on save for bash/css/js(x)/json(c)/lua/markdown/python/sh/terraform/ts(x). Toggle per-buffer with `<leader>uf`, globally with `:lua vim.g.disable_autoformat = true`
 - `actionlint` runs automatically on `.github/workflows/*.yml`
 - LSPs prefer LODAS-local binaries when present: `~/dev/lodas/node_modules/.bin/biome`, `~/.venvs/lodas/bin/{python,ruff}`. Falls back to `$PATH` otherwise.
+- `:ClaudeAccount <name>` flips `CLAUDE_CONFIG_DIR` mid-session, tab-completing from `~/.claude/envs/`. If that directory doesn't exist, the command is a no-op and Claude runs at the default `~/.claude`.
 
 Keymaps worth remembering (leader = space):
 
@@ -104,6 +107,10 @@ Keymaps worth remembering (leader = space):
 | `<space>gp` | preview hunk |
 | `<space>gb` / `<space>gB` | blame line / toggle inline blame |
 | `<space>gd` / `<space>gD` | diff against index / last commit |
+| `<space>ac` | toggle Claude pane |
+| `<space>af` | focus Claude pane |
+| `<space>as` | send selection / current buffer to Claude (also in visual mode) |
+| `<space>aa` / `<space>ar` | accept / reject Claude's proposed diff |
 
 ### `keyboards/`
 `id80_ansi_layout_mine.json` — VIA layout for my id80. Not part of the shell/editor setup, just parked here.
