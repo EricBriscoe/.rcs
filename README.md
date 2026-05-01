@@ -84,7 +84,7 @@ Notable behaviour:
 - format on save for bash/css/js(x)/json(c)/lua/markdown/python/sh/terraform/ts(x). Toggle per-buffer with `<leader>uf`, globally with `:lua vim.g.disable_autoformat = true`
 - `actionlint` runs automatically on `.github/workflows/*.yml`
 - LSPs prefer LODAS-local binaries when present: `~/dev/lodas/node_modules/.bin/biome`, `~/.venvs/lodas/bin/{python,ruff}`. Falls back to `$PATH` otherwise.
-- `:ClaudeAccount <name>` flips `CLAUDE_CONFIG_DIR` mid-session, tab-completing from `~/.claude/envs/`. If that directory doesn't exist, the command is a no-op and Claude runs at the default `~/.claude`.
+- `:ClaudeAccount <name>` flips `CLAUDE_CONFIG_DIR` mid-session, tab-completing from `~/.claude/envs/`. The choice is written to `stdpath("state")/claude-account` and restored on the next nvim launch. If that directory doesn't exist, the command is a no-op and Claude runs at the default `~/.claude`.
 
 Keymaps worth remembering (leader = space):
 
