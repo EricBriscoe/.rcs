@@ -216,8 +216,6 @@ export PATH="$HOME/.local/bin:$PATH"
 
 test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell_integration.zsh"
 
-export CCS_DROID_PATH="/Users/eric/.local/bin/droid"
-
 # Claude Code multi-account: work/personal share everything except credentials.
 # Credentials are keychain-scoped by CLAUDE_CONFIG_DIR, so each env logs in once.
 claude-work()     { CLAUDE_CONFIG_DIR="$HOME/.claude/envs/work"     claude "$@"; }
