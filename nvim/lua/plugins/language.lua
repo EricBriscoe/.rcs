@@ -346,7 +346,14 @@ return {
         },
         sqlfluff = {
           command = "sqlfluff",
-          args = { "fix", "--disable-progress-bar", "--nocolor", "--dialect=postgres", "-" },
+          args = {
+            "fix",
+            "--disable-progress-bar",
+            "--nocolor",
+            "--dialect=postgres",
+            "--exclude-rules=LT05",
+            "-",
+          },
           stdin = true,
         },
       },
@@ -360,17 +367,8 @@ return {
 
       lint.linters_by_ft = {
         sh = { "shellcheck" },
-        sql = { "sqlfluff" },
         terraform = { "tflint" },
         tf = { "tflint" },
-      }
-
-      -- nvim-lint defaults sqlfluff to ANSI dialect; LODAS is Postgres 15.
-      lint.linters.sqlfluff.args = {
-        "lint",
-        "--format=json",
-        "--dialect=postgres",
-        "-",
       }
 
       vim.api.nvim_create_autocmd({ "BufReadPost", "BufWritePost", "InsertLeave" }, {
