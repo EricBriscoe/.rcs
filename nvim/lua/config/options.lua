@@ -24,3 +24,6 @@ vim.diagnostic.config({
   severity_sort = true,
   float = { border = "rounded", source = true },
 })
+
+vim.keymap.set("n", "[t", "gT", { desc = "Previous tab" })
+vim.keymap.set("n", "]t", "gt", { desc = "Next tab" })
