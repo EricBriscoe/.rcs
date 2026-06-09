@@ -61,6 +61,7 @@ olc() {
   echo "$files" | xargs code
 }
 alias lsql='docker exec -it lodas_db psql -U realto -d realto'
+alias aws-creds="$HOME/dev/scripts/aws-to-1p.sh"
 cleandocker () {
   read -q "REPLY?Nuke ALL Docker containers, images, volumes, networks, and build cache? [y/N] " || return
   echo
@@ -70,38 +71,6 @@ cleandocker () {
 }
 
 eval "$(zoxide init zsh)"
-
-# Auto-activate the correct venv when cd-ing between worktrees and the main repo
-_lodas_auto_activate_venv() {
-  local git_root
-  git_root="$(git rev-parse --show-toplevel 2>/dev/null)" || return
-
-  local REPO="$HOME/dev/lodas"
-
-  # Already in the correct venv? Skip.
-  if [[ -n "$VIRTUAL_ENV" ]]; then
-    if [[ "$git_root" == "$REPO" && "$VIRTUAL_ENV" == *"/lodas" ]]; then
-      return
-    elif [[ "$VIRTUAL_ENV" == "$git_root/venv" ]]; then
-      return
-    fi
-  fi
-
-  # Activate the appropriate venv
-  if [[ "$git_root" == "$REPO" ]]; then
-    workon lodas 2>/dev/null
-  elif [[ -f "$git_root/venv/bin/activate" ]]; then
-    source "$git_root/venv/bin/activate"
-  else
-    return
-  fi
-
-  export PYTHONPATH="$git_root:$_LODAS_BASE_PYTHONPATH"
-}
-
-autoload -U add-zsh-hook
-add-zsh-hook chpwd _lodas_auto_activate_venv
-_lodas_auto_activate_venv  # Run once at startup for shells opened inside a worktree
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
@@ -144,6 +113,19 @@ wt () {
       return 1
     }
     branch="$resolved"
+  fi
+
+  # If a worktree already exists for this branch, jump straight to it
+  local existing
+  existing="$(git -C "$root" worktree list --porcelain 2>/dev/null \
+    | awk -v b="refs/heads/$branch" '
+        /^worktree / { wt=$2 }
+        $0 == "branch " b { print wt; exit }
+    ')"
+  if [[ -n "$existing" && -d "$existing" ]]; then
+    echo "Worktree for '$branch' already exists at $existing"
+    cd "$existing" || return 1
+    return 0
   fi
 
   local output
@@ -213,8 +195,65 @@ lodas_wt_up () {
   "$root/scripts/lodas.py" tilt up --all
 }
 export PATH="$HOME/.local/bin:$PATH"
+export PATH="$HOME/.cargo/bin:$PATH"
+
+# LODAS personal glossary — `lodef` opens it, `lodef <term>` greps for a term.
+# Renders with glow if available; falls back to plain text.
+lodef() {
+  local glossary="$HOME/Documents/LODAS/glossary.md"
+  if [[ ! -f "$glossary" ]]; then
+    echo "Glossary not found: $glossary"
+    return 1
+  fi
+  local has_glow=0
+  command -v glow >/dev/null 2>&1 && has_glow=1
+  if [[ -z "$1" ]]; then
+    if (( has_glow )); then
+      glow -w 0 -p "$glossary"
+    else
+      ${PAGER:-less} "$glossary"
+    fi
+    return
+  fi
+  local term="${(L)1}"
+  local result
+  result=$(awk -v RS='\n## ' -v term="$term" '
+    NR==1 { next }
+    tolower($0) ~ term { print "## " $0 }
+  ' "$glossary")
+  if [[ -z "$result" ]]; then
+    echo "No match for '$1' in $glossary"
+    return 1
+  fi
+  if (( has_glow )); then
+    print -r -- "$result" | glow -w 0 -
+  else
+    print -r -- "$result"
+  fi
+}
+lodef-edit() { ${EDITOR:-code} "$HOME/Documents/LODAS/glossary.md"; }
 
 test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell_integration.zsh"
+
+# Tab title = git branch when inside a repo, else the current directory name.
+# Reuses oh-my-zsh's `title` helper (handles iTerm2/tmux escape codes); we just
+# feed it the branch/dir and stop omz from overwriting it with PWD/command name.
+DISABLE_AUTO_TITLE=true
+_tab_title() {
+  emulate -L zsh
+  local name
+  name=$(git symbolic-ref --quiet --short HEAD 2>/dev/null)
+  if [[ -z "$name" ]]; then
+    if git rev-parse --git-dir &>/dev/null; then
+      name="@$(git rev-parse --short HEAD 2>/dev/null)"  # detached HEAD -> short sha
+    else
+      name=${PWD:t}                                       # not a repo -> dir name
+    fi
+  fi
+  title "$name"
+}
+autoload -U add-zsh-hook
+add-zsh-hook precmd _tab_title
 
 # Claude Code multi-account: work/personal share everything except credentials.
 # Credentials are keychain-scoped by CLAUDE_CONFIG_DIR, so each env logs in once.
