@@ -9,9 +9,46 @@ export _LODAS_BASE_PYTHONPATH="$PYTHONPATH"
 export PYTHONPATH=$REPO:$_LODAS_BASE_PYTHONPATH
 export WORKON_HOME=~/.venvs
 export ENV=LOCAL
+export EDITOR=nvim
 
 source /opt/homebrew/bin/virtualenvwrapper.sh
-workon lodas
+
+# Auto-activate venvs per project, worktree-aware. Priority: a local venv at
+# the git root ($root/venv), then $WORKON_HOME/<main-repo-name> — derived from
+# git-common-dir, so every worktree of lodas shares ~/.venvs/lodas. Only ever
+# deactivates a venv it activated itself; manual workon/activate is left alone.
+typeset -g _AUTO_VENV=""
+_auto_venv() {
+  emulate -L zsh
+  local root venv=""
+  root="$(git rev-parse --show-toplevel 2>/dev/null)"
+  if [[ -n "$root" ]]; then
+    if [[ -f "$root/venv/bin/activate" ]]; then
+      venv="$root/venv"
+    else
+      local common name
+      common="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
+      name="${common:h:t}"
+      [[ -n "$name" && -f "$WORKON_HOME/$name/bin/activate" ]] && venv="$WORKON_HOME/$name"
+    fi
+  fi
+
+  # A venv we didn't activate is the user's business — leave it alone
+  [[ -n "$VIRTUAL_ENV" && "$VIRTUAL_ENV" != "$_AUTO_VENV" ]] && return
+
+  if [[ "$venv" != "$VIRTUAL_ENV" ]]; then
+    [[ -n "$VIRTUAL_ENV" ]] && deactivate
+    if [[ -n "$venv" ]]; then
+      source "$venv/bin/activate"
+      _AUTO_VENV="$venv"
+    else
+      _AUTO_VENV=""
+    fi
+  fi
+}
+autoload -U add-zsh-hook
+add-zsh-hook chpwd _auto_venv
+_auto_venv  # cover the shell's starting directory; chpwd only fires on cd
 
 eval "$(fnm env)"
 eval "$(fnm completions --shell zsh)"
@@ -128,8 +165,17 @@ wt () {
     return 0
   fi
 
+  # lodas.py runs under `python`, which lives in the repo's virtualenv. The chpwd
+  # hook only activates that venv once you're inside the repo, but wt may be run
+  # from anywhere (e.g. ~). Create the worktree from within $root in a subshell,
+  # activating the venv there, so this works with no venv active and leaves the
+  # caller's shell untouched.
   local output
-  output="$("$root/scripts/lodas.py" create worktree "$branch" "$@")" || return 1
+  output="$(
+    cd "$root" || exit 1
+    typeset -f _auto_venv >/dev/null && _auto_venv >/dev/null 2>&1
+    "$root/scripts/lodas.py" create worktree "$branch" "$@"
+  )" || return 1
 
   # lodas.py prints "cd <path>" on the last line; extract the path
   local target
@@ -152,17 +198,13 @@ cwt () {
   main_repo="$(cd "$root" && git rev-parse --git-common-dir 2>/dev/null)"
   main_repo="$(cd "$root" && cd "${main_repo:-.git}/.." && pwd)"
 
-  # Deactivate worktree venv if active
-  if [[ -n "$VIRTUAL_ENV" && "$VIRTUAL_ENV" != *"/lodas" ]]; then
-    deactivate
-  fi
-
   "$root/scripts/lodas.py" clean worktree "$@" || return 1
 
-  # Return to main repo and reactivate its venv
   cd "$main_repo" || return 1
-  workon lodas
 }
+
+# wtpr: open an iTerm2 tab per open PR (mine), each in its worktree
+[ -f ~/dev/.rcs/zsh/wtpr.zsh ] && source ~/dev/.rcs/zsh/wtpr.zsh
 
 lodas_wt_up () {
   local root
@@ -174,12 +216,6 @@ lodas_wt_up () {
   if [[ ! -x "$root/scripts/lodas.py" ]]; then
     echo "error: $root/scripts/lodas.py not found"
     return 1
-  fi
-
-  # Ensure correct venv is active for this worktree
-  if [[ -f "$root/venv/bin/activate" && "$VIRTUAL_ENV" != "$root/venv" ]]; then
-    echo "Activating worktree venv: $root/venv"
-    source "$root/venv/bin/activate"
   fi
 
   echo "Using repo: $root"
