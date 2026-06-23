@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Idempotent setup for this dotfiles repo. Mercilessly replaces any
-# existing ~/.zshrc, ~/.tmux.conf, ~/.config/nvim.
+# Idempotent setup for this dotfiles repo. Mercilessly replaces any existing
+# ~/.zshrc, ~/.tmux.conf, ~/.config/nvim, ~/.config/sqlfluff.
 #
-# Assumes macOS + Homebrew (Apple Silicon).
+# macOS + Homebrew (Apple Silicon) only.
 
 set -euo pipefail
 
 if [[ "$(uname)" != "Darwin" ]]; then
-  echo "setup.sh: macOS + Homebrew only" >&2
+  echo "setup.sh: macOS only" >&2
   exit 1
 fi
 
-if ! command -v brew >/dev/null 2>&1; then
+if [[ ! -x /opt/homebrew/bin/brew ]]; then
   echo "setup.sh: install Homebrew first (https://brew.sh)" >&2
   exit 1
 fi
@@ -19,6 +19,18 @@ fi
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 say() { printf '\n==> %s\n' "$*"; }
+
+# Put Homebrew first on PATH for this script *and* every future login shell,
+# ahead of /usr/bin so `python3` resolves to Homebrew's (the system python3
+# lacks virtualenvwrapper). A stock Homebrew install writes this to ~/.zprofile;
+# some installs only drop /etc/paths.d/homebrew, which path_helper appends
+# *after* /usr/bin — leaving system python first. Pin it ourselves, idempotently.
+say "Ensuring Homebrew is first on PATH (~/.zprofile)"
+brew_shellenv='eval "$(/opt/homebrew/bin/brew shellenv)"'
+if ! grep -qsF "$brew_shellenv" "$HOME/.zprofile"; then
+  printf '%s\n' "$brew_shellenv" >>"$HOME/.zprofile"
+fi
+eval "$brew_shellenv"
 
 say "Installing Homebrew packages"
 brew install \
@@ -38,16 +50,13 @@ say "Wiring up fzf key bindings (ctrl+t, ctrl+r) and completion"
 # touching rc files itself.
 "$(brew --prefix fzf)/install" --key-bindings --completion --no-update-rc
 
-say "Installing virtualenvwrapper + lodas venv"
+say "Installing virtualenvwrapper"
+# Generic Python venv tooling the zshrc uses for worktree-aware auto-activation.
+# Installed into Homebrew's python; create venvs yourself with `mkvirtualenv`.
 if [[ ! -x /opt/homebrew/bin/virtualenvwrapper.sh ]]; then
-  /opt/homebrew/bin/pip3 install --break-system-packages virtualenvwrapper
+  "$(brew --prefix)/bin/pip3" install --break-system-packages virtualenvwrapper
 fi
-export WORKON_HOME="$HOME/.venvs"
-# shellcheck disable=SC1091
-source /opt/homebrew/bin/virtualenvwrapper.sh
-if [[ ! -d "$WORKON_HOME/lodas" ]]; then
-  mkvirtualenv lodas
-fi
+mkdir -p "$HOME/.venvs"
 
 say "Linking dotfiles into \$HOME (replacing anything in the way)"
 mkdir -p "$HOME/.config"
@@ -58,3 +67,4 @@ ln -s "$REPO/nvim"      "$HOME/.config/nvim"
 ln -s "$REPO/sqlfluff"  "$HOME/.config/sqlfluff"
 
 say "Done. Open a new shell. nvim's first launch will bootstrap lazy.nvim + Mason."
+say "Machine-specific extras go in ~/.zshrc.local (and nvim/lua/local.lua), sourced if present."

@@ -12,34 +12,41 @@ cd ~/dev/.rcs
 
 `setup.sh` is idempotent and will replace anything in its way. It:
 
+- ensures Homebrew is first on `PATH` for login shells by adding `eval "$(brew shellenv)"` to `~/.zprofile` (ahead of `/usr/bin`, so `python3` resolves to Homebrew's — the system `python3` lacks `virtualenvwrapper`)
 - `brew install`s `fnm`, `zoxide`, `fzf`, `neovim`, `ripgrep`, `fd`, `bat`, `git`, `tmux`, `node`, `python`
 - installs oh-my-zsh (skipped if already present)
 - runs the fzf installer to wire up `ctrl+t` / `ctrl+r` / completion (writes `~/.fzf.zsh`)
-- installs `virtualenvwrapper` and creates the `lodas` venv
+- installs `virtualenvwrapper` and creates `~/.venvs` (create venvs yourself with `mkvirtualenv <name>`)
 - symlinks `~/.zshrc`, `~/.tmux.conf`, `~/.config/nvim`, and `~/.config/sqlfluff` into this repo
 
-Optional bits that the zshrc sources only when present: iTerm2 shell integration, Docker CLI completions, the `droid` CLI.
+Optional bits that the zshrc sources only when present: iTerm2 shell integration, Docker CLI completions.
 
 First nvim launch bootstraps `lazy.nvim`, then Mason installs the LSPs/formatters/linters listed below (~3s after open). `:Lazy sync` to update.
+
+## Machine-local config
+
+This repo is generic. Anything machine- or work-specific (paths, secrets, project functions) lives in two unversioned files, sourced only when present — so a machine without them stays clean:
+
+- **`~/.zshrc.local`** — sourced at the end of `zshrc`. Define work functions/aliases/exports here; it can use the helpers `zshrc` already defines (e.g. `_auto_venv`).
+- **`nvim/lua/local.lua`** (`require("local")`, gitignored) — optional table of overrides consumed by the nvim config:
+  - `biome` / `ruff` / `python` — absolute paths to project-local binaries (LSP + formatters prefer these, falling back to `$PATH` when absent)
+  - `dbs` — a function returning `{ name = connection-url }` for the `vim-dadbod-ui` connection list (`<leader>D`)
 
 ## What's in each file
 
 ### `zshrc`
 oh-my-zsh with `robbyrussell` and the `git` plugin. Beyond that:
 
-- auto-activates the `lodas` venv at startup, and per-worktree `venv/` when `cd`-ing into one (`chpwd` hook)
-- adds `$HOME/.local/bin` and the `lodas` repo to `PYTHONPATH`
+- auto-activates a venv per project, worktree-aware (`chpwd` hook): a local `venv/` at the git root, else `~/.venvs/<main-repo-name>` (derived from `git-common-dir`, so every worktree of a repo shares one venv). Only deactivates venvs it activated itself.
 - `compinit` cached to once per day
-- sources `fnm`, `zoxide`, `fzf`, iTerm2 integration, Docker completions when present
+- sources `fnm`, `zoxide`, `fzf`, `virtualenvwrapper`, iTerm2 integration, Docker completions when present
+- pins `VIRTUALENVWRAPPER_PYTHON` to Homebrew's `python3` so virtualenvwrapper works regardless of `PATH` order
+- tab title = current git branch (or short SHA / dir name when not on a branch)
+- sources `~/.zshrc.local` last, if present
 
 Functions and aliases:
 
-- `lodas <args>` — runs `scripts/lodas.py` from the current repo, falling back to `~/dev/lodas`
 - `olc [parent]` — `code` opens every file changed on this branch since `parent` (auto-detected from reflog, defaults to `main`)
-- `wt <branch-or-ticket>` — create + jump into a worktree. Bare numbers become `LM-NNNN`; ticket IDs fuzzy-match existing branches via `fzf`
-- `cwt` — clean the current worktree and bounce back to the main repo with the right venv
-- `lodas_wt_up` — `tilt down` → `lodas ci` → `tilt up --all`
-- `lsql` — psql into the local LODAS Postgres container
 - `cleandocker` — confirms, then force-removes every container and prunes every image, volume, network, and build cache
 - `claude-work` / `claude-personal` — `claude` with a per-account `CLAUDE_CONFIG_DIR`
 
@@ -56,8 +63,9 @@ lua/config/terminal.lua      -- floating terminal toggle
 lua/plugins/git.lua          -- gitsigns
 lua/plugins/language.lua     -- LSP, completion, format, lint
 lua/plugins/navigation.lua   -- fzf-lua pickers
-lua/plugins/sql.lua          -- vim-dadbod-ui with worktree-aware connections
+lua/plugins/sql.lua          -- vim-dadbod-ui (connections from lua/local.lua)
 lazy-lock.json               -- pinned plugin commits
+lua/local.lua                -- optional, gitignored machine-local overrides
 ```
 
 Plugins (all via `lazy.nvim`):
@@ -71,7 +79,7 @@ Plugins (all via `lazy.nvim`):
 - `nvim-lint` — async linting
 - `fzf-lua` — files / grep / buffers / etc.
 - `gitsigns.nvim` — gutter signs, hunk staging, blame
-- `vim-dadbod` + `vim-dadbod-ui` — query runner / schema browser; the connection auto-targets the current worktree's Postgres container (reads `DB_HOST_PORT` from the worktree's `.env`)
+- `vim-dadbod` + `vim-dadbod-ui` — query runner / schema browser; connections come from `lua/local.lua`'s `dbs()` (empty by default)
 
 Mason installs:
 
@@ -83,7 +91,7 @@ Notable behaviour:
 
 - format on save for bash/css/js(x)/json(c)/lua/markdown/python/sh/sql/terraform/ts(x). Toggle per-buffer with `<leader>uf`, globally with `:lua vim.g.disable_autoformat = true`. SQL files under `db/deltas/` are exempt — those are append-only history.
 - `actionlint` runs automatically on `.github/workflows/*.yml`
-- LSPs prefer LODAS-local binaries when present: `~/dev/lodas/node_modules/.bin/biome`, `~/.venvs/lodas/bin/{python,ruff}`. Falls back to `$PATH` otherwise.
+- `biome`/`ruff`/`python` prefer the binaries named in `lua/local.lua` when present; otherwise fall back to `$PATH`.
 
 Keymaps worth remembering (leader = space):
 
@@ -106,7 +114,7 @@ Keymaps worth remembering (leader = space):
 | `<space>gp` | preview hunk |
 | `<space>gb` / `<space>gB` | blame line / toggle inline blame |
 | `<space>gd` / `<space>gD` | diff against index / last commit |
-| `<space>D` | toggle DB UI (auto-targets current worktree's Postgres) |
+| `<space>D` | toggle DB UI (connections from `lua/local.lua`) |
 | `:olc` (or `:Olc`) | open each branch-changed file in its own tab (idempotent — skips files already open) |
 
 ### `sqlfluff/`

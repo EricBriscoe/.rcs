@@ -1,7 +1,11 @@
-local lodas_root = "/Users/eric/dev/lodas"
-local lodas_biome = lodas_root .. "/node_modules/.bin/biome"
-local lodas_python = "/Users/eric/.venvs/lodas/bin/python"
-local lodas_ruff = "/Users/eric/.venvs/lodas/bin/ruff"
+-- Optional machine-local overrides (e.g. work binary paths) from lua/local.lua
+-- (gitignored, absent on most machines). Falls back to PATH binaries when missing.
+local ok_local, L = pcall(require, "local")
+local local_cfg = (ok_local and type(L) == "table") and L or {}
+
+local biome_bin = local_cfg.biome or "biome"
+local ruff_bin = local_cfg.ruff or "ruff"
+local python_bin = local_cfg.python
 
 local function executable(path)
   return vim.fn.executable(path) == 1
@@ -182,7 +186,7 @@ return {
       })
 
       vim.lsp.config("ruff", {
-        cmd = { command(lodas_ruff, "ruff"), "server" },
+        cmd = { command(ruff_bin, "ruff"), "server" },
         init_options = {
           settings = {
             lineLength = 100,
@@ -212,7 +216,7 @@ return {
             },
           },
           python = {
-            pythonPath = executable(lodas_python) and lodas_python or nil,
+            pythonPath = (python_bin and executable(python_bin)) and python_bin or nil,
           },
         },
       })
@@ -231,7 +235,7 @@ return {
       })
 
       vim.lsp.config("biome", {
-        cmd = { command(lodas_biome, "biome"), "lsp-proxy" },
+        cmd = { command(biome_bin, "biome"), "lsp-proxy" },
         root_dir = function(bufnr, on_dir)
           local root = vim.fs.root(bufnr, {
             { "biome.json", "biome.jsonc" },
@@ -329,17 +333,17 @@ return {
       },
       formatters = {
         biome = {
-          command = command(lodas_biome, "biome"),
+          command = command(biome_bin, "biome"),
           require_cwd = true,
           cwd = function()
             return vim.fs.root(0, { "biome.json", "biome.jsonc", "package.json" })
           end,
         },
         ruff_fix = {
-          command = command(lodas_ruff, "ruff"),
+          command = command(ruff_bin, "ruff"),
         },
         ruff_format = {
-          command = command(lodas_ruff, "ruff"),
+          command = command(ruff_bin, "ruff"),
         },
         shfmt = {
           prepend_args = { "-i", "4", "-ci" },
