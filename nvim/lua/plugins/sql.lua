@@ -1,32 +1,13 @@
--- LODAS gives each git worktree its own Postgres container on a port
--- written into that worktree's .env (DB_HOST_PORT). Discover it from
--- the cwd's worktree root and build the dadbod connection string.
+-- DB connections come from optional machine-local config (lua/local.lua,
+-- gitignored). `L.dbs()` returns a { name = connection-url } table. Without a
+-- local module, no connections are configured.
 
-local function find_dotenv()
-  local start = vim.fn.expand("%:p:h")
-  if start == "" then
-    start = vim.fn.getcwd()
+local function dbs()
+  local ok, L = pcall(require, "local")
+  if ok and type(L) == "table" and type(L.dbs) == "function" then
+    return L.dbs()
   end
-  return vim.fs.find(".env", { upward = true, path = start, type = "file" })[1]
-end
-
-local function read_db_port(env_file)
-  if not env_file then
-    return nil
-  end
-  for line in io.lines(env_file) do
-    local port = line:match("^DB_HOST_PORT=(%d+)")
-    if port then
-      return port
-    end
-  end
-end
-
-local function lodas_dbs()
-  local port = read_db_port(find_dotenv()) or "5432"
-  return {
-    lodas = "postgres://realto:password@localhost:" .. port .. "/realto",
-  }
+  return {}
 end
 
 return {
@@ -39,7 +20,7 @@ return {
       {
         "<leader>D",
         function()
-          vim.g.dbs = lodas_dbs()
+          vim.g.dbs = dbs()
           vim.cmd("DBUIToggle")
         end,
         desc = "Toggle DB UI",
@@ -49,7 +30,7 @@ return {
       vim.g.db_ui_use_nerd_fonts = 1
       vim.g.db_ui_show_database_icon = 1
       vim.g.db_ui_force_echo_notifications = 1
-      vim.g.dbs = lodas_dbs()
+      vim.g.dbs = dbs()
     end,
   },
 }

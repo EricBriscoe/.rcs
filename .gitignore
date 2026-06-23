@@ -1,2 +1,4 @@
 .DS_Store
 
+# Machine-local nvim overrides (work paths, DB connections). Created per-machine.
+nvim/lua/local.lua
