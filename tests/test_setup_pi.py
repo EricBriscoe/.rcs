@@ -68,6 +68,9 @@ class PiSetupTests(unittest.TestCase):
     def test_failed_package_install_leaves_settings_untouched(self):
         fake_bin = Path(self.temp.name) / "bin"
         fake_bin.mkdir()
+        node = fake_bin / "node"
+        node.write_text("#!/bin/sh\nexit 0\n")
+        node.chmod(0o755)
         npm = fake_bin / "npm"
         npm.write_text("#!/bin/sh\nexit 42\n")
         npm.chmod(0o755)
