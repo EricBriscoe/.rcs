@@ -18,7 +18,7 @@ cd ~/dev/.rcs
 - runs the fzf installer to wire up `ctrl+t` / `ctrl+r` / completion (writes `~/.fzf.zsh`)
 - installs `virtualenvwrapper` and creates `~/.venvs` (create venvs yourself with `mkvirtualenv <name>`)
 - symlinks `~/.zshrc`, `~/.tmux.conf`, `~/.config/nvim`, and `~/.config/sqlfluff` into this repo
-- installs the Pi version pinned in `pi/version` and links its settings
+- installs the Pi and Playwright CLI versions pinned in `pi/`, installs Chromium, and links Pi's settings, instructions, extensions, and skills
 
 Optional bits that the zshrc sources only when present: iTerm2 shell integration, Docker CLI completions.
 
@@ -39,9 +39,51 @@ Inside Pi, run `/login openai-codex` and complete the browser sign-in with your 
 
 `~/.pi/agent/settings.json` links to `pi/settings.json` in this checkout. Saved changes from `/settings`, `/model`, and `/thinking` therefore appear in `git diff`. Commit and push those changes to share them. On the other Mac, run `git pull --ff-only`, rerun `./setup-pi.sh`, and restart Pi.
 
-The installer adds Node if needed and installs the version in `pi/version`. To upgrade Pi on all your Macs, change that file, rerun the installer, and commit it. Use `./setup-pi.sh --skip-install` to relink settings without installing packages. Existing settings are backed up before replacement; rerunning the script keeps a correct link in place.
+The installer adds Node if needed and installs the versions in `pi/version` and `pi/playwright-version`, plus Playwright's Chromium browser. To upgrade these tools on all your Macs, change the version files, rerun the installer, and commit them. Use `./setup-pi.sh --skip-install` to relink resources without installing packages. Existing resources are backed up before replacement; rerunning the script keeps correct links in place.
 
-Credentials, sessions, project trust decisions, and model caches stay under `~/.pi/agent/` on each Mac. Only the settings file is linked into Git. Each Mac signs in separately. See [Pi's provider documentation](https://pi.dev/docs/latest/providers) for subscription login details.
+Credentials, sessions, project trust decisions, and model caches stay under `~/.pi/agent/` on each Mac. Each Mac signs in separately. See [Pi's provider documentation](https://pi.dev/docs/latest/providers) for subscription login details.
+
+### Web search and browsing
+
+The `rcs-web` extension adds two tools backed by [Microsoft's Playwright CLI](https://github.com/microsoft/playwright-cli):
+
+- `web_search` searches Bing by default and returns titles, source URLs, and snippets. DuckDuckGo is selectable with `engine: "duckduckgo"`. Neither route needs an API key. Search engines can rate-limit requests or show a CAPTCHA; the tool reports a challenge or unreadable results page as an error.
+- `web_browse` opens pages, reads text, returns snapshots with element refs, clicks, fills inputs, presses keys, scrolls, manages tabs, and returns screenshots. It supports localhost URLs for testing development apps.
+
+Ask Pi to search for a topic and read the relevant sources, or to open your local app and test a specific interaction. Search and browsing use separate sessions, so searching won't replace the page you're working on. Browser calls preserve state until you close the browser or leave the Pi session. To watch a browser, ask Pi to open it with `headed: true`; close it first if it's already running headless.
+
+Profiles are isolated from your normal browser. CLI logs and screenshots live in temporary directories outside Git. Page text and snapshots return bounded slices with a `nextOffset` for reading more. Screenshots are also returned as images to the model.
+
+### Questions and background monitors
+
+The `ask_user` tool shows a choice menu or text input and waits for your response. Every choice menu includes a typed-answer option. Escape cancels the question; Pi receives no answer. Dialogs work in interactive Pi and compatible RPC clients. Print mode reports that no interactive UI is available.
+
+The `monitor` tool starts background shell commands, such as a log watcher or a long-running test. New stdout, stderr, or exit status wakes Pi automatically after a short batching delay. If Pi is already working, the output waits until that work finishes and then starts a follow-up turn. Pi can list monitors, read pending output, or stop them. Buffers are bounded, and monitors stop when you leave or switch the Pi session.
+
+For example: “Monitor the development server logs and investigate any new errors.” The monitor's command runs with the same local access as Pi's other shell commands.
+
+### Commit and push with schlep
+
+The installer links `pi/skills/schlep/` into `~/.pi/agent/skills/schlep/`. This is the Codex `schlep` workflow, with Pi's command syntax added. Run `/reload`, then `/skill:schlep` in a repository, or ask Pi to schlep it.
+
+Schlep reviews and checks all current changes, commits them together on the current branch, and pushes that branch. It includes pre-existing and untracked changes without another confirmation. It stops on failed checks, conflicts, an in-progress merge or rebase, detached HEAD, or a rejected push. It never force-pushes or switches branches.
+
+### Letting Pi configure itself
+
+`~/.pi/agent/AGENTS.md` links to `pi/AGENTS.md`. Pi loads this as global context, including when it starts in another project. It explains how to locate this checkout from the settings symlink, where configuration and dependency pins live, and how to verify changes. Custom extension source lives in `pi/extensions/`; the installer links the `web`, `ask-user`, and `monitor` directories into `~/.pi/agent/extensions/` with an `rcs-` prefix.
+
+After changing instructions or extension code, run `/reload` in Pi. Restart Pi to check changes to startup defaults. Publish the source changes in this repo to share them across Macs.
+
+### Pi checks
+
+```sh
+bash -n setup-pi.sh setup.sh
+python3 -m unittest discover -s tests -v
+node --test tests/pi-*.test.mjs
+PI_WEB_LIVE=1 node --test tests/pi-web.test.mjs
+```
+
+The last command opens Chromium against a temporary local test page. It requires the installed Playwright CLI and browser. Public search availability also needs a live `web_search` call.
 
 ## Machine-local config
 

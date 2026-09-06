@@ -41,20 +41,48 @@ if ! "$skip_install"; then
     fi
   fi
   pi_version="$(cat "$REPO/pi/version")"
-  npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@$pi_version"
+  playwright_version="$(cat "$REPO/pi/playwright-version")"
+  npm install -g --ignore-scripts \
+    "@earendil-works/pi-coding-agent@$pi_version" \
+    "@playwright/cli@$playwright_version"
+  PLAYWRIGHT_SKIP_BROWSER_GC=1 playwright-cli install-browser chromium
 fi
 
 pi_agent_dir="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
 mkdir -p "$pi_agent_dir"
-pi_settings="$pi_agent_dir/settings.json"
-if [[ ! -L "$pi_settings" ]] || [[ "$(readlink "$pi_settings")" != "$REPO/pi/settings.json" ]]; then
-  if [[ -e "$pi_settings" || -L "$pi_settings" ]]; then
-    pi_backup_dir="$(mktemp -d "$pi_agent_dir/settings-backup.XXXXXX")"
-    mv "$pi_settings" "$pi_backup_dir/settings.json"
-    printf 'Previous settings saved to %s/settings.json\n' "$pi_backup_dir"
+pi_agent_dir="$(cd "$pi_agent_dir" && pwd)"
+link_resource() {
+  local source="$1" destination="$2" label="$3" backup_dir previous_target
+  mkdir -p "$(dirname "$destination")"
+  if [[ -L "$destination" ]] && [[ "$(readlink "$destination")" == "$source" ]]; then
+    return
   fi
-  ln -s "$REPO/pi/settings.json" "$pi_settings"
-fi
+  if [[ -e "$destination" || -L "$destination" ]]; then
+    backup_dir="$(mktemp -d "$pi_agent_dir/$label-backup.XXXXXX")"
+    previous_target=""
+    if [[ -L "$destination" ]]; then
+      previous_target="$(readlink "$destination")"
+    fi
+    if [[ -n "$previous_target" && "$previous_target" != /* ]]; then
+      ln -s "$(dirname "$destination")/$previous_target" "$backup_dir/$(basename "$destination")"
+      rm "$destination"
+    else
+      mv "$destination" "$backup_dir/$(basename "$destination")"
+    fi
+    printf 'Previous %s saved to %s\n' "$label" "$backup_dir"
+  fi
+  ln -s "$source" "$destination"
+}
+
+link_resource "$REPO/pi/settings.json" "$pi_agent_dir/settings.json" settings
+link_resource "$REPO/pi/AGENTS.md" "$pi_agent_dir/AGENTS.md" instructions
+link_resource "$REPO/pi/extensions/web" "$pi_agent_dir/extensions/rcs-web" extension
+link_resource "$REPO/pi/extensions/ask-user" "$pi_agent_dir/extensions/rcs-ask-user" extension
+link_resource "$REPO/pi/extensions/monitor" "$pi_agent_dir/extensions/rcs-monitor" extension
+link_resource "$REPO/pi/skills/schlep" "$pi_agent_dir/skills/schlep" skill
 
 printf 'Pi settings linked to %s/pi/settings.json\n' "$REPO"
+printf 'Pi web tools linked to %s/pi/extensions/web\n' "$REPO"
+printf 'Pi question and monitor tools linked to %s/pi/extensions/\n' "$REPO"
+printf 'Pi schlep skill linked to %s/pi/skills/schlep\n' "$REPO"
 printf 'Run pi in a project. On a new Mac, use /login openai-codex to sign in.\n'
