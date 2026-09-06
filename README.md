@@ -1,6 +1,6 @@
 # .rcs
 
-My zsh, tmux and neovim config. Real files live in this repo, `~/` is symlinked into it.
+My zsh, tmux, neovim and Pi config. Real files live in this repo, `~/` is symlinked into it.
 
 ## Setup
 
@@ -18,10 +18,30 @@ cd ~/dev/.rcs
 - runs the fzf installer to wire up `ctrl+t` / `ctrl+r` / completion (writes `~/.fzf.zsh`)
 - installs `virtualenvwrapper` and creates `~/.venvs` (create venvs yourself with `mkvirtualenv <name>`)
 - symlinks `~/.zshrc`, `~/.tmux.conf`, `~/.config/nvim`, and `~/.config/sqlfluff` into this repo
+- installs the Pi version pinned in `pi/version` and links its settings
 
 Optional bits that the zshrc sources only when present: iTerm2 shell integration, Docker CLI completions.
 
 First nvim launch bootstraps `lazy.nvim`, then Mason installs the LSPs/formatters/linters listed below (~3s after open). `:Lazy sync` to update.
+
+## Pi on another Mac
+
+With Homebrew installed, run this to install only Pi:
+
+```sh
+git clone https://github.com/EricBriscoe/.rcs.git ~/dev/.rcs
+cd ~/dev/.rcs
+./setup-pi.sh
+pi
+```
+
+Inside Pi, run `/login openai-codex` and complete the browser sign-in with your ChatGPT account. The installer uses Pi's subscription provider, with GPT-6 Astra and high reasoning as the startup defaults. If login selects a different model, select GPT-6 Astra in `/model` and press Ctrl+S to save it.
+
+`~/.pi/agent/settings.json` links to `pi/settings.json` in this checkout. Saved changes from `/settings`, `/model`, and `/thinking` therefore appear in `git diff`. Commit and push those changes to share them. On the other Mac, run `git pull --ff-only`, rerun `./setup-pi.sh`, and restart Pi.
+
+The installer adds Node if needed and installs the version in `pi/version`. To upgrade Pi on all your Macs, change that file, rerun the installer, and commit it. Use `./setup-pi.sh --skip-install` to relink settings without installing packages. Existing settings are backed up before replacement; rerunning the script keeps a correct link in place.
+
+Credentials, sessions, project trust decisions, and model caches stay under `~/.pi/agent/` on each Mac. Only the settings file is linked into Git. Each Mac signs in separately. See [Pi's provider documentation](https://pi.dev/docs/latest/providers) for subscription login details.
 
 ## Machine-local config
 

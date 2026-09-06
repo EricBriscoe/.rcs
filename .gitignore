@@ -1,4 +1,12 @@
 .DS_Store
+__pycache__/
 
 # Machine-local nvim overrides (work paths, DB connections). Created per-machine.
 nvim/lua/local.lua
+
+# Pi credentials and runtime state belong in ~/.pi/agent, outside this repo.
+pi/auth.json
+pi/sessions/
+pi/trust.json
+pi/models-store.json
+pi/settings-backup.*/
