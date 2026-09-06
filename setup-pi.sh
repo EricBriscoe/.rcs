@@ -79,10 +79,18 @@ link_resource "$REPO/pi/AGENTS.md" "$pi_agent_dir/AGENTS.md" instructions
 link_resource "$REPO/pi/extensions/web" "$pi_agent_dir/extensions/rcs-web" extension
 link_resource "$REPO/pi/extensions/ask-user" "$pi_agent_dir/extensions/rcs-ask-user" extension
 link_resource "$REPO/pi/extensions/monitor" "$pi_agent_dir/extensions/rcs-monitor" extension
-link_resource "$REPO/pi/skills/schlep" "$pi_agent_dir/skills/schlep" skill
+link_resource "$REPO/pi/extensions/memory" "$pi_agent_dir/extensions/rcs-memory" extension
+link_resource "$REPO/pi/extensions/project-context" "$pi_agent_dir/extensions/rcs-project-context" extension
+link_resource "$REPO/pi/extensions/orchestrate" "$pi_agent_dir/extensions/rcs-orchestrate" extension
+# Retire only our known imported skill link, never a user's unrelated replacement.
+if [[ -L "$pi_agent_dir/skills/schlep" && "$(readlink "$pi_agent_dir/skills/schlep")" == "$REPO/pi/skills/schlep" ]]; then
+  rm "$pi_agent_dir/skills/schlep"
+fi
+link_resource "$REPO/pi/launch.mjs" "$pi_agent_dir/bin/pi" launcher
 
 printf 'Pi settings linked to %s/pi/settings.json\n' "$REPO"
 printf 'Pi web tools linked to %s/pi/extensions/web\n' "$REPO"
-printf 'Pi question and monitor tools linked to %s/pi/extensions/\n' "$REPO"
-printf 'Pi schlep skill linked to %s/pi/skills/schlep\n' "$REPO"
+printf 'Pi question, monitor and memory tools linked to %s/pi/extensions/\n' "$REPO"
+printf 'Pi-native launcher linked to %s/bin/pi\n' "$pi_agent_dir"
+printf 'Use that launcher (the repo zshrc adds it to PATH); restart Pi to clear inherited context.\n'
 printf 'Run pi in a project. On a new Mac, use /login openai-codex to sign in.\n'

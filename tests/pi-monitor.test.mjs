@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
-import { MonitorDispatcher, MonitorManager, OutputBuffer, monitorMessage } from "../pi/extensions/monitor/monitor.mjs";
+import { MonitorDispatcher, MonitorManager, OutputBuffer, monitorMessage } from "../pi/extensions/monitor/monitor.ts";
 
 function quote(text) {
   return `'${text.replaceAll("'", "'\\''")}'`;

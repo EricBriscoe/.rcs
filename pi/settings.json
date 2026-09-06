@@ -2,5 +2,6 @@
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-6-astra",
   "defaultThinkingLevel": "high",
-  "theme": "dark"
+  "theme": "dark",
+  "lastChangelogVersion": "0.85.1"
 }

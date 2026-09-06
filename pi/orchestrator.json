@@ -1,0 +1,11 @@
+{
+  "maxWorkers": 3,
+  "maxOutstanding": 100,
+  "taskTimeoutSeconds": 900,
+  "roles": {
+    "coordinator": { "provider": "openai-codex", "model": "gpt-6-astra", "thinking": "low" },
+    "scout": { "provider": "openai-codex", "model": "gpt-5.4-mini", "thinking": "low" },
+    "worker": { "provider": "openai-codex", "model": "gpt-5.5", "thinking": "medium" },
+    "strong": { "provider": "openai-codex", "model": "gpt-6-astra", "thinking": "high" }
+  }
+}

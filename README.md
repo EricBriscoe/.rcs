@@ -18,7 +18,7 @@ cd ~/dev/.rcs
 - runs the fzf installer to wire up `ctrl+t` / `ctrl+r` / completion (writes `~/.fzf.zsh`)
 - installs `virtualenvwrapper` and creates `~/.venvs` (create venvs yourself with `mkvirtualenv <name>`)
 - symlinks `~/.zshrc`, `~/.tmux.conf`, `~/.config/nvim`, and `~/.config/sqlfluff` into this repo
-- installs the Pi and Playwright CLI versions pinned in `pi/`, installs Chromium, and links Pi's settings, instructions, extensions, and skills
+- installs the Pi and Playwright CLI versions pinned in `pi/`, installs Chromium, and links Pi's native launcher, settings, instructions, and extensions
 
 Optional bits that the zshrc sources only when present: iTerm2 shell integration, Docker CLI completions.
 
@@ -32,6 +32,7 @@ With Homebrew installed, run this to install only Pi:
 git clone https://github.com/EricBriscoe/.rcs.git ~/dev/.rcs
 cd ~/dev/.rcs
 ./setup-pi.sh
+export PATH="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/bin:$PATH"
 pi
 ```
 
@@ -62,15 +63,61 @@ The `monitor` tool starts background shell commands, such as a log watcher or a 
 
 For example: “Monitor the development server logs and investigate any new errors.” The monitor's command runs with the same local access as Pi's other shell commands.
 
-### Commit and push with schlep
+### Cross-session memory
 
-The installer links `pi/skills/schlep/` into `~/.pi/agent/skills/schlep/`. This is the Codex `schlep` workflow, with Pi's command syntax added. Run `/reload`, then `/skill:schlep` in a repository, or ask Pi to schlep it.
+The `rcs-memory` extension adds automatic project-scoped recall and background learning. It uses local SQLite/FTS5 at `~/.pi/agent/memory/memory.sqlite` (or under `PI_CODING_AGENT_DIR`), outside this repo. No Obsidian, separate service, embedding account, or imports of existing Claude/Codex/Pi history.
 
-Schlep reviews and checks all current changes, commits them together on the current branch, and pushes that branch. It includes pre-existing and untracked changes without another confirmation. It stops on failed checks, conflicts, an in-progress merge or rebase, detached HEAD, or a rejected push. It never force-pushes or switches branches.
+Run Pi from the repository you are working on. Worktrees share memory; unrelated repositories do not. Outside Git, memory belongs to the exact starting directory. Shell `cd` does not change that scope. Untrusted projects have memory disabled. Global notes require explicit `/memory global ...` commands.
+
+Learning uses Pi's configured model and quota while idle, with filtered new user/assistant text—not tool/file dumps or thinking. Relevant memories and their provenance are recalled in a bounded, ephemeral context block. Memory is fallible evidence; current instructions and verified code take precedence. Jobs survive interruptions, and `/reload` cancels active work without waiting for a hung provider.
+
+Useful commands:
+
+```text
+/memory                             Status and help
+/memory list                        Inspect saved notes and IDs
+/memory search <query>
+/memory remember <topic> | <text>    Save or correct a project note
+/memory forget <id>                 Delete and block regeneration
+/memory learn off                   Stop learning and discard queued work
+/memory read off                    Disable automatic/model-tool recall
+```
+
+Secret filtering is best effort. Disable learning for sensitive work. Forgetting removes stored records, versions and search entries, but not original chats, exports or backups. Model-tool saves/deletions require user confirmation; commands are direct user controls. See [the memory extension guide](pi/extensions/memory/README.md) for scope, limits, privacy, restoring revoked topics, and optional real-model tests.
+
+### Pi-only resources
+
+Use `~/.pi/agent/bin/pi`; the repo's `zshrc` puts it first on `PATH`. The launcher disables automatic ancestor `AGENTS.md`/`CLAUDE.md`, shared skills, prompt templates, and extension discovery. It explicitly loads only this checkout's Pi instructions/extensions and future native `pi/skills` or `pi/prompts`. Deliberately supplied CLI resource paths remain explicit user choices. Calling the npm binary directly bypasses this isolation.
+
+Project instructions belong in a real, non-symlinked `.pi/AGENTS.md` in the trusted starting workspace. They do not inherit parent-directory or other-harness guidance. Existing Claude/Codex files and shared skills remain available to their own harnesses, but Pi no longer imports them. The copied Codex schlep skill was removed. Normal Pi does not launch routine background research/review agents.
+
+**Restart through the launcher** to clear inherited context; `/reload` alone cannot change an already running process's discovery flags. Old conversation text also remains old conversation text—start a fresh session for a clean workflow.
+
+### Optional orchestration
+
+Run `/orchestrate on`, then send independent text requests as quickly as needed. Each gets an immediate durable task ID. `#12 <answer>` targets task 12 instead of creating another task. `/orchestrate off` stops workers and restores ordinary Pi; it retains partial edits and does not undo anything. Mode is always off after startup/reload.
+
+```text
+/orchestrate project app /absolute/path/to/app
+/orchestrate on
+/orchestrate status
+/orchestrate show 12
+/orchestrate reply 12 <answer or amendment>
+/orchestrate cancel 12
+/orchestrate resume 12
+/orchestrate models
+/orchestrate off
+```
+
+`current`, `rcs`, and an empty `research` workspace are built in. Approve narrower project aliases rather than assigning your whole home directory. A new request such as “Use #12 to update app” can declare a dependency; a message starting with `#12` is a reply/amendment, not a new task.
+
+Profiles in `pi/orchestrator.json` use native Pi's OpenAI provider: Astra/low for routing, GPT-5.4-mini/low for read-only lookups, GPT-5.5/medium for ordinary coding, and Astra/high for harder work. These are Pi API calls and Pi RPC workers, not the Codex CLI. Default limits are three active workers, eight including those waiting for answers, 100 pending tasks, and 15 minutes per worker. Writers serialize by workspace/Git-common directory; read-only scouts may overlap one another. No automatic commits, pushes, deploys, or reviewer dispatch.
+
+See [the orchestrator guide](pi/extensions/orchestrate/README.md) for recovery, model availability, logs, scope boundaries, and first-version limitations.
 
 ### Letting Pi configure itself
 
-`~/.pi/agent/AGENTS.md` links to `pi/AGENTS.md`. Pi loads this as global context, including when it starts in another project. It explains how to locate this checkout from the settings symlink, where configuration and dependency pins live, and how to verify changes. Custom extension source lives in `pi/extensions/`; the installer links the `web`, `ask-user`, and `monitor` directories into `~/.pi/agent/extensions/` with an `rcs-` prefix.
+`~/.pi/agent/AGENTS.md` links to `pi/AGENTS.md`. The native launcher explicitly appends this Pi-owned context, including when it starts in another project. It explains how to locate this checkout from the settings symlink, where configuration and dependency pins live, and how to verify changes. Custom extension source lives in `pi/extensions/`; the installer links the `web`, `ask-user`, `monitor`, `memory`, `project-context`, and `orchestrate` directories into `~/.pi/agent/extensions/` with an `rcs-` prefix.
 
 After changing instructions or extension code, run `/reload` in Pi. Restart Pi to check changes to startup defaults. Publish the source changes in this repo to share them across Macs.
 
@@ -82,6 +129,8 @@ python3 -m unittest discover -s tests -v
 node --test tests/pi-*.test.mjs
 PI_WEB_LIVE=1 node --test tests/pi-web.test.mjs
 ```
+
+The Node tests use the globally installed Pi package for native loading, RPC, monitor reload, memory and orchestration integration tests; run `./setup-pi.sh` first on a new Mac. They load extensions through their symlinks and exercise same-process reload, refreshed helper code, output/context delivery, persistence, and cleanup. Memory's optional provider test is skipped by default; run `PI_MEMORY_LIVE=1 node --test tests/pi-memory-live.test.mjs` to exercise real extraction with synthetic evidence. `PI_ORCHESTRATE_LIVE=1 node --test tests/pi-orchestrate-live.test.mjs` tests real routing and two native coding workers against disposable files, using the existing local login without copying credentials.
 
 The last command opens Chromium against a temporary local test page. It requires the installed Playwright CLI and browser. Public search availability also needs a live `web_search` call.
 
