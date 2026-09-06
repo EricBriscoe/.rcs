@@ -19,7 +19,10 @@ class PiSetupTests(unittest.TestCase):
         self.web_extension = self.agent_dir / "extensions/rcs-web"
         self.ask_extension = self.agent_dir / "extensions/rcs-ask-user"
         self.monitor_extension = self.agent_dir / "extensions/rcs-monitor"
-        self.schlep_skill = self.agent_dir / "skills/schlep"
+        self.memory_extension = self.agent_dir / "extensions/rcs-memory"
+        self.project_extension = self.agent_dir / "extensions/rcs-project-context"
+        self.orchestrate_extension = self.agent_dir / "extensions/rcs-orchestrate"
+        self.launcher = self.agent_dir / "bin/pi"
         self.env = dict(os.environ, PI_CODING_AGENT_DIR=str(self.agent_dir))
 
     def run_setup(self, *args):
@@ -60,7 +63,10 @@ class PiSetupTests(unittest.TestCase):
             (self.web_extension, REPO / "pi/extensions/web"),
             (self.ask_extension, REPO / "pi/extensions/ask-user"),
             (self.monitor_extension, REPO / "pi/extensions/monitor"),
-            (self.schlep_skill, REPO / "pi/skills/schlep"),
+            (self.memory_extension, REPO / "pi/extensions/memory"),
+            (self.project_extension, REPO / "pi/extensions/project-context"),
+            (self.orchestrate_extension, REPO / "pi/extensions/orchestrate"),
+            (self.launcher, REPO / "pi/launch.mjs"),
         ):
             with self.subTest(link=link):
                 self.assertTrue(link.is_symlink())
@@ -75,6 +81,10 @@ class PiSetupTests(unittest.TestCase):
         sessions.mkdir()
         session = sessions / "test.jsonl"
         session.write_text("local session fixture\n")
+        memory = self.agent_dir / "memory/memory.sqlite"
+        memory.parent.mkdir(mode=0o700)
+        memory.write_bytes(b"local memory fixture")
+        memory.chmod(0o600)
         unrelated_extension = self.agent_dir / "extensions/other.ts"
         unrelated_extension.parent.mkdir()
         unrelated_extension.write_text("// Local extension fixture\n")
@@ -86,7 +96,8 @@ class PiSetupTests(unittest.TestCase):
         self.assert_resource_links()
         links = (
             self.settings, self.instructions, self.web_extension,
-            self.ask_extension, self.monitor_extension, self.schlep_skill,
+            self.ask_extension, self.monitor_extension, self.memory_extension,
+            self.project_extension, self.orchestrate_extension, self.launcher,
         )
         link_inodes = [link.lstat().st_ino for link in links]
         self.run_setup("--skip-install")
@@ -97,6 +108,8 @@ class PiSetupTests(unittest.TestCase):
         self.assertEqual(auth.read_text(), '{"test": "local credential fixture"}\n')
         self.assertEqual(auth.stat().st_mode & 0o777, 0o600)
         self.assertEqual(session.read_text(), "local session fixture\n")
+        self.assertEqual(memory.read_bytes(), b"local memory fixture")
+        self.assertEqual(memory.stat().st_mode & 0o777, 0o600)
         self.assertEqual(unrelated_extension.read_text(), "// Local extension fixture\n")
         self.assertEqual(unrelated_skill.read_text(), "Local skill fixture\n")
 
@@ -139,17 +152,35 @@ class PiSetupTests(unittest.TestCase):
         self.assertEqual(extensions[0].read_text(), "// Previous extension fixture\n")
         self.assert_resource_links()
 
-    def test_existing_skill_is_backed_up_once(self):
-        self.schlep_skill.mkdir(parents=True)
-        (self.schlep_skill / "SKILL.md").write_text("Previous skill fixture\n")
-
+    def test_existing_memory_extension_is_backed_up_once(self):
+        self.memory_extension.mkdir(parents=True)
+        (self.memory_extension / "index.ts").write_text("// Previous memory extension\n")
         self.run_setup("--skip-install")
         self.run_setup("--skip-install")
-
-        backups = list(self.agent_dir.glob("skill-backup.*/schlep/SKILL.md"))
+        backups = list(self.agent_dir.glob("extension-backup.*/rcs-memory/index.ts"))
         self.assertEqual(len(backups), 1)
-        self.assertEqual(backups[0].read_text(), "Previous skill fixture\n")
+        self.assertEqual(backups[0].read_text(), "// Previous memory extension\n")
         self.assert_resource_links()
+
+    def test_retired_imported_skill_link_is_removed_without_deleting_replacements(self):
+        old = self.agent_dir / "skills/schlep"
+        old.parent.mkdir()
+        old.symlink_to(REPO / "pi/skills/schlep")
+        self.run_setup("--skip-install")
+        self.assertFalse(old.is_symlink())
+        old.mkdir()
+        (old / "SKILL.md").write_text("User-owned replacement\n")
+        self.run_setup("--skip-install")
+        self.assertEqual((old / "SKILL.md").read_text(), "User-owned replacement\n")
+
+    def test_existing_launcher_is_backed_up_once(self):
+        self.launcher.parent.mkdir()
+        self.launcher.write_text("previous launcher\n")
+        self.run_setup("--skip-install")
+        self.run_setup("--skip-install")
+        backups = list(self.agent_dir.glob("launcher-backup.*/pi"))
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(backups[0].read_text(), "previous launcher\n")
 
     def test_relative_extension_symlink_backup_keeps_its_target(self):
         self.env["PI_CODING_AGENT_DIR"] = os.path.relpath(self.agent_dir, REPO)

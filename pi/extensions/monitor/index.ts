@@ -1,7 +1,9 @@
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { resolve } from "node:path";
-import { MonitorDispatcher, MonitorManager } from "./monitor.mjs";
+// Keep local helpers in TypeScript: Pi reloads them through jiti, while .mjs
+// imports remain in Node's native ESM cache across /reload.
+import { MonitorDispatcher, MonitorManager } from "./monitor.ts";
 
 export default function (pi: ExtensionAPI) {
   let monitors = new MonitorManager();
