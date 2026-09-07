@@ -1,0 +1,7 @@
+{
+  "version": "0.48.0",
+  "assets": {
+    "darwin-arm64": { "name": "rtk-aarch64-apple-darwin.tar.gz", "sha256": "4fa025cc93a744b6963f4e53a008e5ba3f74b6a38061f4a47c639e1c3023e0db" },
+    "darwin-x64": { "name": "rtk-x86_64-apple-darwin.tar.gz", "sha256": "a95f2c23e08572dcc84ddff5fbe432e41e7f94369622eb086cca49ae0b6f61e8" }
+  }
+}

@@ -8,6 +8,8 @@ import { Learner } from "./learner.ts";
 import { capture, GLOBAL_SCOPE, KINDS, memoryContext, projectIdentity, redact, safeText, topicKey } from "./policy.ts";
 import { MemoryStore } from "./store.ts";
 
+import { recordUsage } from "../efficiency/usage.ts";
+
 const CONTEXT_TYPE = "rcs-memory-context";
 const HELP = `Memory commands (current repository, shared across worktrees; exact folder outside Git):
 /memory                          Status, storage and controls
@@ -39,7 +41,8 @@ export default function (pi: ExtensionAPI) {
   let recalled: string[] = [];
   let timestamp = Date.now();
   let learningError = false;
-  const path = join(process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent"), "memory", "memory.sqlite");
+  const agent = process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent");
+  const path = join(agent, "memory", "memory.sqlite");
 
   function status(ctx: ExtensionContext) {
     if (!store) { ctx.ui.setStatus("rcs-memory", "memory: unavailable"); return; }
@@ -110,6 +113,7 @@ export default function (pi: ExtensionAPI) {
           systemPrompt,
           messages: [{ role: "user", content: [{ type: "text", text: input }], timestamp: Date.now() }],
         }, { maxTokens: 4096, signal, cacheRetention: "none", sessionId: randomUUID() });
+        recordUsage(agent, ctx.sessionManager.getSessionId(), "memory", `${ctx.model.provider}/${ctx.model.id}`, result.usage);
         if (result.stopReason === "error" || result.stopReason === "aborted" || result.stopReason === "length") throw new Error("Memory extraction did not complete.");
         return {
           text: result.content.filter((part) => part.type === "text").map((part: any) => part.text).join("\n"),
@@ -152,7 +156,7 @@ export default function (pi: ExtensionAPI) {
       // Explicit tool results remain in the original chat, but their active
       // context must not keep serving records that have since been revoked.
       if (message.role !== "toolResult" || message.toolName !== "memory") return message;
-      const records = Array.isArray(message.details) ? message.details : [message.details];
+      const records: any[] = Array.isArray(message.details) ? message.details : [message.details];
       if (!records.some((record) => record?.id && typeof record.text === "string")) return message;
       const current = records.flatMap((record) => {
         try {

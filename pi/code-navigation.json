@@ -1,0 +1,43 @@
+{
+  "astGrepVersion": "0.45.3",
+  "servers": {
+    "typescript": {
+      "packages": ["typescript-language-server@5.3.0", "typescript@6.0.3"],
+      "package": "typescript-language-server", "bin": "typescript-language-server", "args": ["--stdio"],
+      "initializationOptions": { "disableAutomaticTypingAcquisition": true, "maxTsServerMemory": 1024, "tsserver": { "useSyntaxServer": "never", "logVerbosity": "off" } },
+      "languages": { ".ts": "typescript", ".tsx": "typescriptreact", ".js": "javascript", ".jsx": "javascriptreact", ".mjs": "javascript", ".cjs": "javascript", ".mts": "typescript", ".cts": "typescript" }
+    },
+    "python": {
+      "packages": ["pyright@1.1.413"], "package": "pyright", "bin": "pyright-langserver", "args": ["--stdio"],
+      "languages": { ".py": "python", ".pyi": "python" }
+    },
+    "html": {
+      "packages": ["vscode-langservers-extracted@4.10.0"], "package": "vscode-langservers-extracted", "bin": "vscode-html-language-server", "args": ["--stdio"],
+      "languages": { ".html": "html", ".htm": "html" }
+    },
+    "css": {
+      "packages": ["vscode-langservers-extracted@4.10.0"], "package": "vscode-langservers-extracted", "bin": "vscode-css-language-server", "args": ["--stdio"],
+      "languages": { ".css": "css", ".scss": "scss", ".less": "less" }
+    },
+    "json": {
+      "packages": ["vscode-langservers-extracted@4.10.0"], "package": "vscode-langservers-extracted", "bin": "vscode-json-language-server", "args": ["--stdio"],
+      "languages": { ".json": "json", ".jsonc": "jsonc" }
+    },
+    "yaml": {
+      "packages": ["yaml-language-server@1.24.0"], "package": "yaml-language-server", "bin": "yaml-language-server", "args": ["--stdio"],
+      "languages": { ".yaml": "yaml", ".yml": "yaml" }
+    },
+    "bash": {
+      "packages": ["bash-language-server@5.6.0"], "package": "bash-language-server", "bin": "bash-language-server", "args": ["start"],
+      "languages": { ".sh": "shellscript", ".bash": "shellscript", ".bashrc": "shellscript" }
+    },
+    "go": { "command": ["gopls"], "languages": { ".go": "go" } },
+    "rust": { "command": ["rust-analyzer"], "languages": { ".rs": "rust" }, "settings": { "rust-analyzer": { "checkOnSave": false, "cargo": { "buildScripts": { "enable": false } }, "procMacro": { "enable": false } } } },
+    "cpp": { "command": ["clangd"], "languages": { ".c": "c", ".h": "c", ".cc": "cpp", ".cpp": "cpp", ".cxx": "cpp", ".hpp": "cpp" } },
+    "lua": { "command": ["lua-language-server"], "languages": { ".lua": "lua" } },
+    "java": { "command": ["jdtls"], "languages": { ".java": "java" } },
+    "ruby": { "command": ["ruby-lsp"], "languages": { ".rb": "ruby" } },
+    "swift": { "command": ["sourcekit-lsp"], "languages": { ".swift": "swift" } },
+    "zig": { "command": ["zls"], "languages": { ".zig": "zig" } }
+  }
+}

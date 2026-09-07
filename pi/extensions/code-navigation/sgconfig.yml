@@ -1,0 +1,2 @@
+# Do not auto-load repository ast-grep plugins, rules or dynamic libraries.
+ruleDirs: []
