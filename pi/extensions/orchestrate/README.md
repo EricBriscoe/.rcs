@@ -25,11 +25,11 @@ The CLI and RPC client must remain alive to do work; there is no launchd job or 
 | Role | Default model | Thinking | Use |
 | --- | --- | --- | --- |
 | coordinator | openai-codex/gpt-6-astra | low | Tool-free bounded JSON routing |
-| scout | openai-codex/gpt-5.4-mini | low | Read-only files and public web lookups |
-| worker | openai-codex/gpt-5.5 | medium | Straightforward coding |
+| scout | openai-codex/gpt-5.6-luna | low | Read-only files and public web lookups |
+| worker | openai-codex/gpt-5.6-terra | medium | Straightforward coding |
 | strong | openai-codex/gpt-6-astra | high | Difficult debugging, architecture, uncertainty |
 
-All requests use Pi's existing login. Model names are selected from configured roles, never arbitrary planner output. If a configured model is absent from Pi's authenticated catalog, the current Pi model is used and labeled as a fallback. Catalog presence does **not** prove subscription entitlement: an API rejection fails the task without silently retrying possibly side-effecting work. Change the profile, `/reload`, turn orchestration on again, and explicitly resume after inspecting the task. GPT-5.4 was present in the catalog but rejected by the tested ChatGPT account; GPT-5.5 and GPT-5.4-mini were verified live.
+All requests use Pi's existing login. Model names are selected from configured roles, never arbitrary planner output. If a configured model is absent from Pi's authenticated catalog, the current Pi model is used and labeled as a fallback. Catalog presence does **not** prove subscription entitlement: an API rejection fails the task without silently retrying possibly side-effecting work. Change the profile, `/reload`, turn orchestration on again, and explicitly resume after inspecting the task.
 
 One coordinator request runs at a time, separate from the main chat model. Up to three workers actively execute; up to eight total workers may exist when some are waiting for user input. Each worker has a 15-minute wall-clock limit (including waiting) and a 100-tool-call cap. The queue allows 100 unresolved tasks. Coordinator calls have a 60-second timeout and 2,048 output-token cap. These are safety bounds, not a dollar-budget guarantee.
 

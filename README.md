@@ -111,7 +111,7 @@ Run `/orchestrate on`, then send independent text requests as quickly as needed.
 
 `current`, `rcs`, and an empty `research` workspace are built in. Approve narrower project aliases rather than assigning your whole home directory. A new request such as “Use #12 to update app” can declare a dependency; a message starting with `#12` is a reply/amendment, not a new task.
 
-Profiles in `pi/orchestrator.json` use native Pi's OpenAI provider: Astra/low for routing, GPT-5.4-mini/low for read-only lookups, GPT-5.5/medium for ordinary coding, and Astra/high for harder work. These are Pi API calls and Pi RPC workers, not the Codex CLI. Default limits are three active workers, eight including those waiting for answers, 100 pending tasks, and 15 minutes per worker. Writers serialize by workspace/Git-common directory; read-only scouts may overlap one another. No automatic commits, pushes, deploys, or reviewer dispatch.
+Profiles in `pi/orchestrator.json` use native Pi's OpenAI provider: Astra/low for routing, GPT-5.6 Luna/low for read-only lookups, GPT-5.6 Terra/medium for ordinary coding, and Astra/high for harder work. These are Pi API calls and Pi RPC workers, not the Codex CLI. Default limits are three active workers, eight including those waiting for answers, 100 pending tasks, and 15 minutes per worker. Writers serialize by workspace/Git-common directory; read-only scouts may overlap one another. No automatic commits, pushes, deploys, or reviewer dispatch.
 
 See [the orchestrator guide](pi/extensions/orchestrate/README.md) for recovery, model availability, logs, scope boundaries, and first-version limitations.
 
