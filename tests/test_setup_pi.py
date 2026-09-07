@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -16,12 +17,13 @@ class PiSetupTests(unittest.TestCase):
         self.agent_dir.mkdir()
         self.settings = self.agent_dir / "settings.json"
         self.instructions = self.agent_dir / "AGENTS.md"
-        self.web_extension = self.agent_dir / "extensions/rcs-web"
-        self.ask_extension = self.agent_dir / "extensions/rcs-ask-user"
-        self.monitor_extension = self.agent_dir / "extensions/rcs-monitor"
-        self.memory_extension = self.agent_dir / "extensions/rcs-memory"
-        self.project_extension = self.agent_dir / "extensions/rcs-project-context"
-        self.orchestrate_extension = self.agent_dir / "extensions/rcs-orchestrate"
+        self.web_extension = self.agent_dir / "extensions/web"
+        self.ask_extension = self.agent_dir / "extensions/ask-user"
+        self.monitor_extension = self.agent_dir / "extensions/monitor"
+        self.memory_extension = self.agent_dir / "extensions/memory"
+        self.project_extension = self.agent_dir / "extensions/project-context"
+        self.navigation_extension = self.agent_dir / "extensions/code-navigation"
+        self.efficiency_extension = self.agent_dir / "extensions/efficiency"
         self.launcher = self.agent_dir / "bin/pi"
         self.env = dict(os.environ, PI_CODING_AGENT_DIR=str(self.agent_dir))
 
@@ -36,7 +38,12 @@ class PiSetupTests(unittest.TestCase):
         fake_bin.mkdir()
         self.install_log = Path(self.temp.name) / "install.log"
         scripts = {
-            "node": "exit 0\n",
+            "node": (
+                'if [ "$1" = "-p" ]; then printf "%s\\n" "$PI_SETUP_SUBAGENT_PIN"; fi\n'
+                'if [ "$2" = "install" ]; then printf "%s\\n" pi "$2" "$3" '
+                '"npm_config_ignore_scripts=${npm_config_ignore_scripts:-}" >> "$PI_SETUP_TEST_LOG"; fi\n'
+                'exit 0\n'
+            ),
             "npm": (
                 'printf "%s\\n" npm "$@" >> "$PI_SETUP_TEST_LOG"\n'
                 f"exit {npm_exit}\n"
@@ -54,6 +61,7 @@ class PiSetupTests(unittest.TestCase):
             executable.chmod(0o755)
         self.env["PATH"] = f"{fake_bin}:{self.env['PATH']}"
         self.env["PI_SETUP_TEST_LOG"] = str(self.install_log)
+        self.env["PI_SETUP_SUBAGENT_PIN"] = json.loads((REPO / "pi/settings.json").read_text())["packages"][0]
         self.env.pop("PLAYWRIGHT_SKIP_BROWSER_GC", None)
 
     def assert_resource_links(self):
@@ -65,7 +73,8 @@ class PiSetupTests(unittest.TestCase):
             (self.monitor_extension, REPO / "pi/extensions/monitor"),
             (self.memory_extension, REPO / "pi/extensions/memory"),
             (self.project_extension, REPO / "pi/extensions/project-context"),
-            (self.orchestrate_extension, REPO / "pi/extensions/orchestrate"),
+            (self.navigation_extension, REPO / "pi/extensions/code-navigation"),
+            (self.efficiency_extension, REPO / "pi/extensions/efficiency"),
             (self.launcher, REPO / "pi/launch.mjs"),
         ):
             with self.subTest(link=link):
@@ -97,7 +106,8 @@ class PiSetupTests(unittest.TestCase):
         links = (
             self.settings, self.instructions, self.web_extension,
             self.ask_extension, self.monitor_extension, self.memory_extension,
-            self.project_extension, self.orchestrate_extension, self.launcher,
+            self.project_extension,
+            self.navigation_extension, self.efficiency_extension, self.launcher,
         )
         link_inodes = [link.lstat().st_ino for link in links]
         self.run_setup("--skip-install")
@@ -112,6 +122,31 @@ class PiSetupTests(unittest.TestCase):
         self.assertEqual(memory.stat().st_mode & 0o777, 0o600)
         self.assertEqual(unrelated_extension.read_text(), "// Local extension fixture\n")
         self.assertEqual(unrelated_skill.read_text(), "Local skill fixture\n")
+
+    def test_prefixed_links_migrate_without_duplicate_extensions(self):
+        extensions = self.agent_dir / "extensions"
+        extensions.mkdir()
+        for source in (REPO / "pi/extensions").iterdir():
+            if (source / "index.ts").is_file():
+                (extensions / f"rcs-{source.name}").symlink_to(source)
+        self.run_setup("--skip-install")
+        self.run_setup("--skip-install")
+        self.assert_resource_links()
+        self.assertEqual(list(extensions.glob("rcs-*")), [])
+
+    def test_prefixed_user_replacements_are_preserved(self):
+        extensions = self.agent_dir / "extensions"
+        old_directory = extensions / "rcs-memory"
+        old_directory.mkdir(parents=True)
+        (old_directory / "index.ts").write_text("// User replacement\n")
+        other = Path(self.temp.name) / "user-extension"
+        other.mkdir()
+        old_link = extensions / "rcs-web"
+        old_link.symlink_to(other)
+        self.run_setup("--skip-install")
+        self.assert_resource_links()
+        self.assertEqual((old_directory / "index.ts").read_text(), "// User replacement\n")
+        self.assertEqual(old_link.resolve(), other.resolve())
 
     def test_existing_settings_are_backed_up_once(self):
         previous = '{"defaultProvider": "another-provider"}\n'
@@ -145,7 +180,7 @@ class PiSetupTests(unittest.TestCase):
         self.run_setup("--skip-install")
 
         instructions = list(self.agent_dir.glob("instructions-backup.*/AGENTS.md"))
-        extensions = list(self.agent_dir.glob("extension-backup.*/rcs-web/index.ts"))
+        extensions = list(self.agent_dir.glob("extension-backup.*/web/index.ts"))
         self.assertEqual(len(instructions), 1)
         self.assertEqual(instructions[0].read_text(), previous_instructions)
         self.assertEqual(len(extensions), 1)
@@ -157,21 +192,40 @@ class PiSetupTests(unittest.TestCase):
         (self.memory_extension / "index.ts").write_text("// Previous memory extension\n")
         self.run_setup("--skip-install")
         self.run_setup("--skip-install")
-        backups = list(self.agent_dir.glob("extension-backup.*/rcs-memory/index.ts"))
+        backups = list(self.agent_dir.glob("extension-backup.*/memory/index.ts"))
         self.assertEqual(len(backups), 1)
         self.assertEqual(backups[0].read_text(), "// Previous memory extension\n")
         self.assert_resource_links()
 
-    def test_retired_imported_skill_link_is_removed_without_deleting_replacements(self):
-        old = self.agent_dir / "skills/schlep"
-        old.parent.mkdir()
-        old.symlink_to(REPO / "pi/skills/schlep")
+    def test_skills_use_standard_discovery_and_back_up_replacements(self):
+        skill = self.agent_dir / "skills/schlep"
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text("User-owned replacement\n")
         self.run_setup("--skip-install")
-        self.assertFalse(old.is_symlink())
-        old.mkdir()
-        (old / "SKILL.md").write_text("User-owned replacement\n")
         self.run_setup("--skip-install")
-        self.assertEqual((old / "SKILL.md").read_text(), "User-owned replacement\n")
+        self.assertEqual(skill.resolve(), REPO / "pi/skills/schlep")
+        self.assertEqual((self.agent_dir / "skills/pi-maintenance").resolve(), REPO / "pi/skills/pi-maintenance")
+        backups = list(self.agent_dir.glob("skill-backup.*/schlep/SKILL.md"))
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(backups[0].read_text(), "User-owned replacement\n")
+
+    def test_retired_runtime_links_removed_but_data_and_user_replacements_survive(self):
+        extensions = self.agent_dir / "extensions"
+        extensions.mkdir()
+        for name in ["orchestrate", "rcs-orchestrate"]:
+            (extensions / name).symlink_to(REPO / "pi/extensions/orchestrate")
+        state = self.agent_dir / "orchestrator/tasks.sqlite"
+        state.parent.mkdir()
+        state.write_bytes(b"historical task fixture")
+        self.run_setup("--skip-install")
+        for name in ["orchestrate", "rcs-orchestrate"]:
+            self.assertFalse((extensions / name).is_symlink())
+        self.assertEqual(state.read_bytes(), b"historical task fixture")
+        replacement = extensions / "orchestrate"
+        replacement.mkdir()
+        (replacement / "index.ts").write_text("// user replacement")
+        self.run_setup("--skip-install")
+        self.assertEqual((replacement / "index.ts").read_text(), "// user replacement")
 
     def test_existing_launcher_is_backed_up_once(self):
         self.launcher.parent.mkdir()
@@ -192,7 +246,7 @@ class PiSetupTests(unittest.TestCase):
 
         self.run_setup("--skip-install")
 
-        backup = next(self.agent_dir.glob("extension-backup.*/rcs-web"))
+        backup = next(self.agent_dir.glob("extension-backup.*/web"))
         self.assertTrue(backup.is_symlink())
         self.assertEqual(backup.resolve(), original.resolve())
         self.assertEqual((backup / "index.ts").read_text(), "// Original local extension\n")
@@ -210,6 +264,8 @@ class PiSetupTests(unittest.TestCase):
             f"@playwright/cli@{playwright_version}",
             "playwright-cli", "install-browser", "chromium",
             "PLAYWRIGHT_SKIP_BROWSER_GC=1",
+            "pi", "install", self.env["PI_SETUP_SUBAGENT_PIN"],
+            "npm_config_ignore_scripts=true",
         ])
         self.assert_resource_links()
 

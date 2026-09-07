@@ -20,6 +20,9 @@ async function fixture(t, { trusted = true, history = [] } = {}) {
   await mkdir(join(agent, "extensions"), { recursive: true });
   await mkdir(project);
   await cp(new URL("../pi/extensions/memory/", import.meta.url), source, { recursive: true });
+  const efficiency = join(root, "checkout/pi/extensions/efficiency");
+  await cp(new URL("../pi/extensions/efficiency/", import.meta.url), efficiency, { recursive: true });
+  await symlink(efficiency, join(agent, "extensions/efficiency"));
   await symlink(source, join(agent, "extensions/rcs-memory"));
   const entry = join(agent, "extensions/rcs-memory/index.ts");
   const previous = process.env.PI_CODING_AGENT_DIR;
