@@ -244,7 +244,8 @@ function poolProvider(): Provider<any> {
     id: PROVIDER_ID,
     name: "OpenAI Codex (account pool)",
     baseUrl: "https://chatgpt.com/backend-api",
-    auth: { apiKey: {
+    // Stored subscription logins require an OAuth handler before pool routing.
+    auth: { oauth: officialOAuth, apiKey: {
       name: "ChatGPT Codex account pool",
       async check() { return (await readPoolState()).enabled ? { source: "Codex account pool" } : undefined; },
       async resolve() { return (await readPoolState()).enabled ? { auth: { apiKey: "codex-account-pool" }, source: "Codex account pool" } : undefined; },
