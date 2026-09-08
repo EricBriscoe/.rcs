@@ -93,7 +93,7 @@ link_resource "$REPO/pi/models.json" "$pi_agent_dir/models.json" models
 link_resource "$REPO/pi/AGENTS.md" "$pi_agent_dir/AGENTS.md" instructions
 # Keep sibling names identical to the checkout: Pi's TypeScript loader resolves
 # ../memory imports relative to the symlink path, not its canonical target.
-for extension in web ask-user monitor memory project-context code-navigation efficiency codex-account-pool; do
+for extension in web ask-user monitor memory project-context code-navigation efficiency codex-account-pool appearance; do
   source="$REPO/pi/extensions/$extension"
   link_resource "$source" "$pi_agent_dir/extensions/$extension" extension
   # Retire only our old prefixed link; preserve user-owned replacements.
@@ -107,6 +107,10 @@ for previous in "$pi_agent_dir/extensions/orchestrate" "$pi_agent_dir/extensions
   if [[ -L "$previous" && "$(readlink "$previous")" == "$REPO/pi/extensions/orchestrate" ]]; then
     rm "$previous"
   fi
+done
+# Link owned themes individually so unrelated user themes remain discoverable.
+for theme in quiet-graphite paper; do
+  link_resource "$REPO/pi/themes/$theme.json" "$pi_agent_dir/themes/$theme.json" theme
 done
 for skill in schlep pi-maintenance; do
   link_resource "$REPO/pi/skills/$skill" "$pi_agent_dir/skills/$skill" skill
@@ -124,7 +128,7 @@ fi
 
 printf 'Pi settings linked to %s/pi/settings.json\n' "$REPO"
 printf 'Pi web tools linked to %s/pi/extensions/web\n' "$REPO"
-printf 'Pi question, monitor, memory, and Codex account-pool extensions linked to %s/pi/extensions/\n' "$REPO"
+printf 'Pi owned extensions and Quiet Graphite/Paper themes linked from %s/pi/\n' "$REPO"
 printf 'Pi-native launcher linked to %s/bin/pi\n' "$pi_agent_dir"
 printf 'Pi checks latest stable dependencies on every launch; PI_AUTO_UPDATE=0 bypasses updates.\n'
 printf 'RTK linked to %s/.local/bin/rtk; both commands use the same installed release. Restart Pi after setup.\n' "$HOME"

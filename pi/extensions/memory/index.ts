@@ -5,11 +5,12 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 // .ts helpers are deliberately reloadable through Pi's jiti loader.
 import { isQuotaExhaustion, quotaResetAt } from "./codex-quota.mjs";
-import { BackgroundDeferred, admissionText } from "./budget.ts";
+import { BackgroundDeferred } from "./budget.ts";
 import type { Admission } from "./budget.ts";
 import { Learner } from "./learner.ts";
 import { capture, GLOBAL_SCOPE, KINDS, memoryContext, projectIdentity, redact, safeText, topicKey } from "./policy.ts";
 import { MemoryStore } from "./store.ts";
+import { memoryStatus } from "./status.ts";
 
 import { recordUsage } from "../efficiency/usage.ts";
 
@@ -54,9 +55,7 @@ export default function (pi: ExtensionAPI) {
 
   function status(ctx: ExtensionContext) {
     if (!store) { ctx.ui.setStatus("rcs-memory", "memory: unavailable"); return; }
-    const stats = store.stats(scope);
-    const pending = stats.jobs.filter((job: any) => ["pending", "running", "failed"].includes(job.state)).reduce((n: number, job: any) => n + job.count, 0);
-    ctx.ui.setStatus("rcs-memory", `memory: ${recalled.length} recalled · ${stats.memories} saved${pending ? ` · ${stats.batches} queued batches (${pending} jobs) · ${admissionText(learner?.admission)}` : ""}${!stats.reading ? " · recall off" : ""}${!stats.learning ? " · learning off" : ""}${learningError ? " · learning deferred (/memory)" : ""}`);
+    ctx.ui.setStatus("rcs-memory", memoryStatus(store.stats(scope), learner?.admission, learningError));
   }
 
   function requireStore(ctx: ExtensionContext): MemoryStore {

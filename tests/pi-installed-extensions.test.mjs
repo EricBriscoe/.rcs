@@ -10,7 +10,7 @@ import test from "node:test";
 const exec = promisify(execFile);
 const checkout = dirname(dirname(fileURLToPath(import.meta.url)));
 const packageDir = join(execFileSync("npm", ["root", "-g"], { encoding: "utf8" }).trim(), "@earendil-works/pi-coding-agent");
-const names = ["ask-user", "code-navigation", "efficiency", "memory", "monitor", "project-context", "web"];
+const names = ["appearance", "ask-user", "code-navigation", "efficiency", "memory", "monitor", "project-context", "web"];
 
 test("migrated installer links load sibling imports in both Pi CLI distributions", { timeout: 60000 }, async t => {
   const root = await mkdtemp(join(tmpdir(), "pi installed extensions "));
@@ -46,7 +46,7 @@ export default function(pi) {
       assert.ok(!commands.some(c => c.name === "orchestrate"));
       assert.ok(commands.some(c => c.name === "code-nav"));
       assert.ok(!commands.some(c => /:\d+$/.test(c.name)), "no duplicate registrations after migration");
-      for (const name of ["code-nav", "tokens", "output"]) assert.ok(commands.find(c => c.name === name).sourceInfo.path.startsWith(join(agent, "extensions")), "loaded through installed links");
+      for (const name of ["appearance", "code-nav", "tokens", "output"]) assert.ok(commands.find(c => c.name === name).sourceInfo.path.startsWith(join(agent, "extensions")), "loaded through installed links");
       await rm(output);
     });
   }
