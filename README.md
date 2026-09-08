@@ -32,7 +32,7 @@ On each Mac, `/login openai-codex` uses your OpenAI subscription. `/model` or `/
 | Memory | `/memory`: recall/learning; uses quota. Start in the target repo; shell `cd` does not change scope. [Guide](pi/extensions/memory/README.md) |
 | Subagents | Stock delegation, workflows, fleet, and worktrees. `/subagents-guide`, `/subagents-fleet`, `/subagents-models`. [Setup](pi/SUBAGENTS.md) |
 | Questions | `ask_user`: choices or text; Escape/blank/unavailable UI is not approval. Interactive/RPC only. |
-| Monitors | Command output wakes Pi. Session-owned; stop unused watchers. |
+| Background commands | `monitor` start requires `notifyOn: "output"` (live events) or `"completion"` (one final result). Session-owned; bounded output, manual read/stop available. |
 | Commit | `/skill:schlep`: stage all non-ignored changes and make one commit; **no push**. [Skill](pi/skills/schlep/SKILL.md) |
 | Maintenance | See [pi-maintenance](pi/skills/pi-maintenance/SKILL.md). |
 

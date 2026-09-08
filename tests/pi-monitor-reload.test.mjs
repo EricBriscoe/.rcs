@@ -18,7 +18,7 @@ const { clearExtensionCache, loadExtensionsCached } = await import(
 
 async function waitFor(predicate, timeout = 5000) {
   const deadline = Date.now() + timeout;
-  while (!predicate()) {
+  while (!(await predicate())) {
     if (Date.now() >= deadline) throw new Error("Timed out waiting for monitor delivery after reload.");
     await delay(10);
   }
@@ -89,8 +89,12 @@ test("Pi reload refreshes monitor helper exports and behavior through the instal
   await writeFile(entryPath, entrySource);
   await load("reload");
   assert.deepEqual((await execute(loaded, { action: "list" }, ctx)).details.monitors, []);
+  const definition = loaded.extensions[0].tools.get("monitor").definition;
+  assert.deepEqual(definition.parameters.properties.notifyOn.enum, ["output", "completion"]);
+  await assert.rejects(execute(loaded, { action: "start", command: "exit 0" }, ctx), /notifyOn is required/);
+  assert.deepEqual((await execute(loaded, { action: "list" }, ctx)).details.monitors, []);
   const started = await execute(loaded, {
-    action: "start",
+    action: "start", notifyOn: "output",
     command: `${quote(process.execPath)} -e ${quote("process.stdout.write('ready after reload'); setInterval(() => {}, 1000)")}`,
   }, ctx);
   await waitFor(() => sent.length === 1);
@@ -107,11 +111,31 @@ test("Pi reload refreshes monitor helper exports and behavior through the instal
   await writeFile(join(sourceDir, helperName), changedHelper);
   await load("reload");
   assert.deepEqual((await execute(loaded, { action: "list" }, ctx)).details.monitors, []);
-  await execute(loaded, { action: "start", command: "printf 0123456789abcdef" }, ctx);
+  const gate = join(root, "complete");
+  const completion = await execute(loaded, {
+    action: "start", notifyOn: "completion",
+    command: `${quote(process.execPath)} -e ${quote(`
+      const fs = require('node:fs');
+      process.stdout.write('0123456789abcdef');
+      const timer = setInterval(() => {
+        if (fs.existsSync(${JSON.stringify(gate)})) clearInterval(timer);
+      }, 10);
+    `)}`,
+  }, ctx);
+  assert.equal(completion.details.notifyOn, "completion");
+  await waitFor(async () => (await execute(loaded, { action: "list" }, ctx)).details.monitors[0].bufferedCharacters === 8);
+  await delay(650); // Longer than the automatic batch window: output must not wake Pi.
+  assert.equal(sent.length, 1);
+  await writeFile(gate, "done");
   await waitFor(() => sent.length === 2);
   const update = sent[1].message.details.monitors[0];
   assert.deepEqual(update.chunks, [{ stream: "stdout", text: "89abcdef" }]);
   assert.equal(update.droppedCharacters, 8);
   assert.equal(update.exitCode, 0);
+  assert.equal(update.notifyOn, "completion");
+  await emit(loaded, "agent_start", ctx);
+  await emit(loaded, "agent_settled", ctx);
+  await delay(650);
+  assert.equal(sent.length, 2, "Completion should trigger exactly one follow-up.");
   assert.deepEqual(notifications, []);
 });
