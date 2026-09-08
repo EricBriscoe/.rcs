@@ -2,10 +2,21 @@
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-6-astra",
   "defaultThinkingLevel": "high",
-  "theme": "dark",
-  "showCacheMissNotices": true,
+  "theme": "paper/dark",
+  "quietStartup": true,
+  "collapseChangelog": true,
+  "hideThinkingBlock": true,
+  "editorPaddingX": 1,
+  "showCacheMissNotices": false,
   "lastChangelogVersion": "0.85.1",
   "packages": [
     "npm:pi-subagents"
-  ]
+  ],
+  "markdown": {
+    "mermaid": "streaming"
+  },
+  "enableInstallTelemetry": false,
+  "terminal": {
+    "showTerminalProgress": true
+  }
 }

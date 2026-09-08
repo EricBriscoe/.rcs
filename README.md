@@ -22,10 +22,11 @@ On each Mac, `/login openai-codex`. Default: Astra/high; `/model` or `/thinking`
 
 ## Pi
 
-The launcher at `${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/bin/pi` checks latest stable dependencies on every launch and uses standard Pi discovery. `PI_AUTO_UPDATE=0 pi --no-extensions` bypasses updates for repair. Versions stay machine-local; no update PRs or test gate. Settings, owned extensions, and skills are linked from this checkout; npm packages are declared in `pi/settings.json`. The optional project-context extension also loads a real `.pi/AGENTS.md` from the trusted starting workspace.
+The launcher at `${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/bin/pi` checks latest stable dependencies on every launch and uses standard Pi discovery. `PI_AUTO_UPDATE=0 pi --no-extensions` bypasses updates for repair. Versions stay machine-local; no update PRs or test gate. Settings, owned extensions, themes, and skills are linked from this checkout; npm packages are declared in `pi/settings.json`. The optional project-context extension also loads a real `.pi/AGENTS.md` from the trusted starting workspace.
 
 | Feature | Usage / reference |
 |---|---|
+| Appearance | Quiet Graphite + compact footer; Paper alternative in `/settings`. `/appearance compact\|stock`. [Guide](pi/extensions/appearance/README.md) |
 | File/code search | Native `grep` (ripgrep), `find`, `ls`; read-only LSP/ast-grep. First-use assessment covers relevant languages. `/code-nav [reassess]`. [Guide](pi/extensions/code-navigation/README.md) |
 | Quiet output / RTK | Automatic supported-output filtering; raw artifacts, no command replay. `/output raw\|auto`, `/tokens [all]`. [Guide](pi/extensions/efficiency/README.md) |
 | Memory | Automatic scoped recall/idle learning. `/memory` controls/search; consumes model quota. Start Pi in the target repo—shell `cd` does not rescope it. [Guide](pi/extensions/memory/README.md) |

@@ -77,6 +77,9 @@ class PiSetupTests(unittest.TestCase):
             (self.project_extension, REPO / "pi/extensions/project-context"),
             (self.navigation_extension, REPO / "pi/extensions/code-navigation"),
             (self.efficiency_extension, REPO / "pi/extensions/efficiency"),
+            (self.agent_dir / "extensions/appearance", REPO / "pi/extensions/appearance"),
+            (self.agent_dir / "themes/quiet-graphite.json", REPO / "pi/themes/quiet-graphite.json"),
+            (self.agent_dir / "themes/paper.json", REPO / "pi/themes/paper.json"),
             (self.launcher, REPO / "pi/launch.mjs"),
             (self.agent_dir / "bin/rtk", REPO / "pi/rtk.mjs"),
             (Path(self.temp.name) / ".local/bin/rtk", REPO / "pi/rtk.mjs"),
@@ -126,6 +129,23 @@ class PiSetupTests(unittest.TestCase):
         self.assertEqual(memory.stat().st_mode & 0o777, 0o600)
         self.assertEqual(unrelated_extension.read_text(), "// Local extension fixture\n")
         self.assertEqual(unrelated_skill.read_text(), "Local skill fixture\n")
+
+    def test_owned_themes_preserve_siblings_back_up_conflicts_and_relink_idempotently(self):
+        themes = self.agent_dir / "themes"
+        themes.mkdir()
+        unrelated = themes / "my-theme.json"
+        unrelated.write_text('{"name":"my-theme"}\n')
+        paper = themes / "paper.json"
+        paper.write_text('{"name":"previous-paper"}\n')
+        self.run_setup("--skip-install")
+        inode = paper.lstat().st_ino
+        self.run_setup("--skip-install")
+        self.assert_resource_links()
+        self.assertEqual(paper.lstat().st_ino, inode)
+        self.assertEqual(unrelated.read_text(), '{"name":"my-theme"}\n')
+        backups = list(self.agent_dir.glob("theme-backup.*/paper.json"))
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(backups[0].read_text(), '{"name":"previous-paper"}\n')
 
     def test_prefixed_links_migrate_without_duplicate_extensions(self):
         extensions = self.agent_dir / "extensions"
