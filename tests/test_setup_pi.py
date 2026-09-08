@@ -264,6 +264,8 @@ class PiSetupTests(unittest.TestCase):
             f"@playwright/cli@{playwright_version}",
             "playwright-cli", "install-browser", "chromium",
             "PLAYWRIGHT_SKIP_BROWSER_GC=1",
+            "npm", "ci", "--ignore-scripts", "--omit=dev", "--prefix",
+            str(REPO / "pi/extensions/codex-account-pool"),
             "pi", "install", self.env["PI_SETUP_SUBAGENT_PIN"],
             "npm_config_ignore_scripts=true",
         ])

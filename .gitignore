@@ -1,5 +1,6 @@
 .DS_Store
 __pycache__/
+node_modules/
 
 # Machine-local nvim overrides (work paths, DB connections). Created per-machine.
 nvim/lua/local.lua

@@ -4,6 +4,9 @@ import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
 // .ts helpers are deliberately reloadable through Pi's jiti loader.
+import { isQuotaExhaustion, quotaResetAt } from "./codex-quota.mjs";
+import { BackgroundDeferred, admissionText } from "./budget.ts";
+import type { Admission } from "./budget.ts";
 import { Learner } from "./learner.ts";
 import { capture, GLOBAL_SCOPE, KINDS, memoryContext, projectIdentity, redact, safeText, topicKey } from "./policy.ts";
 import { MemoryStore } from "./store.ts";
@@ -15,7 +18,10 @@ const HELP = `Memory commands (current repository, shared across worktrees; exac
 /memory                          Status, storage and controls
 /memory list                     Recent memories and their IDs
 /memory search <query>           Search project + approved global memories
-/memory show <id>                Inspect sources and superseded versions
+/memory show <id>                Inspect sources, prior versions and undo IDs
+/memory retired                  List retired aliases (excluded from recall)
+/memory changes                  List reversible consolidations
+/memory undo <change-id>         Restore before-images as manual notes; discard pending learning
 /memory remember <topic> | <text> Explicitly save or correct a project memory
 /memory restore <topic> | <text>  Explicitly restore a previously forgotten topic
 /memory pin <id>                 Always recall (at most 4 pins are loaded)
@@ -24,6 +30,7 @@ const HELP = `Memory commands (current repository, shared across worktrees; exac
 /memory read on|off              Toggle automatic and tool recall
 /memory learn on|off             Toggle automatic learning (off discards pending work)
 /memory retry                    Retry failed learning jobs
+/memory budget [pause|resume|fallback|quota NUMBER] Machine-local learning policy
 /memory export                   Inspect/copy a JSON export (up to 100 memories)
 /memory global <list|show|remember|restore|pin|unpin|forget|export> ...
 Global writes require this explicit command; automatic learning and tools cannot promote project facts globally.
@@ -31,6 +38,7 @@ No historical imports. Original chats and exports are not deleted by forgetting.
 Learning sends bounded, filtered user/assistant text to the configured Pi model while idle; tools/files/thinking are excluded.`;
 
 export default function (pi: ExtensionAPI) {
+  let activeContext: ExtensionContext | undefined;
   let store: MemoryStore | undefined;
   let learner: Learner | undefined;
   let scope = "";
@@ -48,7 +56,7 @@ export default function (pi: ExtensionAPI) {
     if (!store) { ctx.ui.setStatus("rcs-memory", "memory: unavailable"); return; }
     const stats = store.stats(scope);
     const pending = stats.jobs.filter((job: any) => ["pending", "running", "failed"].includes(job.state)).reduce((n: number, job: any) => n + job.count, 0);
-    ctx.ui.setStatus("rcs-memory", `memory: ${recalled.length} recalled · ${stats.memories} saved${pending ? ` · ${pending} queued` : ""}${!stats.reading ? " · recall off" : ""}${!stats.learning ? " · learning off" : ""}${learningError ? " · learning deferred (/memory)" : ""}`);
+    ctx.ui.setStatus("rcs-memory", `memory: ${recalled.length} recalled · ${stats.memories} saved${pending ? ` · ${stats.batches} queued batches (${pending} jobs) · ${admissionText(learner?.admission)}` : ""}${!stats.reading ? " · recall off" : ""}${!stats.learning ? " · learning off" : ""}${learningError ? " · learning deferred (/memory)" : ""}`);
   }
 
   function requireStore(ctx: ExtensionContext): MemoryStore {
@@ -76,10 +84,11 @@ export default function (pi: ExtensionAPI) {
       if (generation !== currentGeneration()) { resetEvidence(ctx); return; }
       const entries = ctx.sessionManager.getBranch();
       if (store.control(scope).learning) {
-        const payload = capture(entries, seen, ctx.sessionManager.getSessionId(), baseline);
-        if (payload) store.enqueue(scope, payload, generation);
-      }
-      for (const entry of entries) seen.add(entry.id);
+        for (const payload of capture(entries, seen, ctx.sessionManager.getSessionId(), baseline)) {
+          if (!store.enqueue(scope, payload, generation)) break;
+          for (const entry of payload.entries) seen.add(entry.id);
+        }
+      } else for (const entry of entries) seen.add(entry.id);
       status(ctx);
     } catch { learningError = true; status(ctx); }
   }
@@ -90,6 +99,7 @@ export default function (pi: ExtensionAPI) {
   }
 
   async function close() {
+    activeContext = undefined;
     await learner?.close();
     learner = undefined;
     store?.close();
@@ -105,21 +115,112 @@ export default function (pi: ExtensionAPI) {
     try {
       ({ scope, root } = await projectIdentity(ctx.cwd));
       store = new MemoryStore(path);
+      store.maintain();
       resetEvidence(ctx);
       learningError = false;
-      learner = new Learner(store, scope, async (systemPrompt, input, signal) => {
-        if (!ctx.model) throw new Error("No configured model for memory learning.");
-        const result = await ctx.modelRegistry.complete(ctx.model, {
-          systemPrompt,
-          messages: [{ role: "user", content: [{ type: "text", text: input }], timestamp: Date.now() }],
-        }, { maxTokens: 4096, signal, cacheRetention: "none", sessionId: randomUUID() });
-        recordUsage(agent, ctx.sessionManager.getSessionId(), "memory", `${ctx.model.provider}/${ctx.model.id}`, result.usage);
-        if (result.stopReason === "error" || result.stopReason === "aborted" || result.stopReason === "length") throw new Error("Memory extraction did not complete.");
-        return {
-          text: result.content.filter((part) => part.type === "text").map((part: any) => part.text).join("\n"),
-          tokens: result.usage?.totalTokens ?? 0,
+      activeContext = ctx;
+      const idle = () => !!activeContext && activeContext.isIdle() && activeContext.isProjectTrusted();
+      let selectedModel: ExtensionContext["model"];
+      let service: any;
+      const stockHold = (admission: Admission): Admission => selectedModel?.provider === "openai-codex" && !admission.accountId
+        ? store!.stockQuotaAdmission() ?? admission : admission;
+      const admit = async (signal: AbortSignal): Promise<Admission> => {
+        selectedModel = activeContext?.model;
+        if (!selectedModel || !idle()) return { allowed: false, mode: "fallback", reason: "working" };
+        service = undefined;
+        if (selectedModel.provider === "openai-codex") {
+          const request: any = {};
+          pi.events.emit("rcs-memory:pool", request);
+          service = request.service;
+          if (service) return stockHold(await service.prepare(store!.budget(), signal, idle));
+        }
+        return stockHold({ allowed: true, mode: "fallback", reason: "quota unavailable" });
+      };
+      learner = new Learner(store, scope, async (systemPrompt, input, signal, admission, onDeferred) => {
+        const model = selectedModel;
+        const current = activeContext;
+        const requestStore = store!;
+        const usageSession = current!.sessionManager.getSessionId();
+        const usageModel = `${model!.provider}/${model!.id}`;
+        const check = async () => {
+          if (!model || !current || activeContext !== current || current.model?.provider !== model.provider || current.model?.id !== model.id || !idle() || signal.aborted)
+            return { allowed: false, mode: admission!.mode, reason: "working or model changed" };
+          return stockHold(service ? await service.prepare(store!.budget(), signal, idle, admission?.accountId, false) : admission!);
         };
-      }, () => ctx.isIdle() && ctx.isProjectTrusted(), (error) => { learningError = !!error; status(ctx); });
+        const checked = await check();
+        if (!checked.allowed || checked.mode !== admission?.mode) throw new BackgroundDeferred({ ...checked, allowed: false, reason: checked.reason ?? "quota changed" });
+        const sessionId = randomUUID();
+        const publishDeferral = (value: Admission, submitted: boolean) => {
+          const error = new BackgroundDeferred(value);
+          error.submitted = submitted;
+          onDeferred?.(error);
+        };
+        const registration = service?.register(sessionId, admission?.accountId, async () => {
+          const checked = await check();
+          return checked.mode === admission?.mode ? checked : { ...checked, allowed: false, reason: "quota changed" };
+        }, publishDeferral);
+        let payloadDeferral: Admission | undefined;
+        let stockQuotaDeferral: Admission | undefined;
+        // Public Codex SSE fetch retains original pre-start structured evidence;
+        // arbitrary provider error prose is never treated as subscription quota.
+        const codexOptions = model?.provider === "openai-codex" && !admission?.accountId ? {
+          transport: "sse" as const,
+          fetch: async (input: any, init: any) => {
+            stockQuotaDeferral = undefined;
+            const checked = await check();
+            if (!checked.allowed || signal.aborted) {
+              payloadDeferral = { ...checked, allowed: false };
+              throw new BackgroundDeferred(payloadDeferral);
+            }
+            const response = await globalThis.fetch(input, init);
+            if (response.status === 429) {
+              const body = (await response.clone().text()).slice(0, 65536);
+              if (isQuotaExhaustion(body, response.status)) {
+                stockQuotaDeferral = {
+                  allowed: false, mode: "fallback", reason: "subscription quota",
+                  nextAt: quotaResetAt(body, Object.fromEntries(response.headers.entries())) ?? Date.now() + 60000,
+                };
+                publishDeferral(stockQuotaDeferral, true);
+                if (!requestStore.closed) requestStore.holdStockQuota(stockQuotaDeferral.nextAt!);
+              }
+            }
+            return response;
+          },
+        } : {};
+
+        try {
+          const result = await current!.modelRegistry.complete(model!, {
+            systemPrompt,
+            messages: [{ role: "user", content: [{ type: "text", text: input }], timestamp: Date.now() }],
+          }, { ...codexOptions, maxTokens: 4096, signal, cacheRetention: "none", sessionId, maxRetries: 0, timeoutMs: 60000,
+            onPayload: async () => {
+              const checked = await check();
+              if (!checked.allowed || checked.mode !== admission?.mode) {
+                payloadDeferral = { ...checked, allowed: false };
+                throw new BackgroundDeferred(payloadDeferral);
+              }
+            },
+          });
+          recordUsage(agent, usageSession, "memory", usageModel, result.usage);
+          if (payloadDeferral) throw new BackgroundDeferred(payloadDeferral);
+          if (stockQuotaDeferral) {
+            const error = new BackgroundDeferred(stockQuotaDeferral);
+            error.submitted = true;
+            throw error;
+          }
+          if (registration?.entry.deferred) {
+            const error = new BackgroundDeferred(registration.entry.deferred);
+            error.submitted = registration.entry.submitted;
+            throw error;
+          }
+          signal.throwIfAborted();
+          if (result.stopReason === "error" || result.stopReason === "aborted" || result.stopReason === "length") throw new Error("Memory extraction did not complete.");
+          return {
+            text: result.content.filter((part) => part.type === "text").map((part: any) => part.text).join("\n"),
+            tokens: result.usage?.totalTokens ?? 0,
+          };
+        } finally { registration?.release(); }
+      }, idle, (error) => { learningError = !!error; if (activeContext) status(activeContext); }, admit);
       learner.wake();
       status(ctx);
     } catch (error) {
@@ -145,6 +246,7 @@ export default function (pi: ExtensionAPI) {
     status(ctx);
     learner?.wake();
   });
+  pi.on("model_select", (_event, ctx) => { learner?.pause(); activeContext = ctx; learner?.wake(); status(ctx); });
   pi.on("agent_start", () => learner?.pause());
   pi.on("agent_settled", (_event, ctx) => { checkpoint(ctx); learner?.wake(); });
   pi.on("session_before_compact", (_event, ctx) => { checkpoint(ctx); });
@@ -160,7 +262,9 @@ export default function (pi: ExtensionAPI) {
       if (!records.some((record) => record?.id && typeof record.text === "string")) return message;
       const current = records.flatMap((record) => {
         try {
-          return store && ctx.isProjectTrusted() && store.control(scope).reading ? [store.get(scope, record.id)] : [];
+          if (!store || !ctx.isProjectTrusted() || !store.control(scope).reading) return [];
+          const current = store.get(scope, record.id);
+          return current.active || record.active === 0 ? [current] : [];
         } catch { return []; }
       });
       const details = Array.isArray(message.details) ? current : current[0] ?? { unavailable: "Memory was forgotten or recall is disabled." };
@@ -168,7 +272,7 @@ export default function (pi: ExtensionAPI) {
     });
     try {
       if (!store || !ctx.isProjectTrusted() || !store.control(scope).reading) return { messages };
-      const memories = recalled.flatMap((id) => { try { return [store!.get(scope, id)]; } catch { return []; } });
+      const memories = recalled.flatMap((id) => { try { const memory = store!.get(scope, id); return memory.active ? [memory] : []; } catch { return []; } });
       const content = memoryContext(memories);
       const position = messages.findLastIndex((message) => message.role === "user");
       if (content && position >= 0) messages.splice(position, 0, {
@@ -216,7 +320,7 @@ export default function (pi: ExtensionAPI) {
         case "forget": {
           const memory = db.get(scope, safeText(params.id, 80, "ID"));
           if (memory.scope !== scope) throw new Error("Global memories can only be forgotten through /memory global forget.");
-          if (!ctx.hasUI || !await ctx.ui.confirm("Forget this project memory?", `${memory.topic}\n${memory.text}\nPending project learning will also be discarded; original chats remain.`)) throw new Error("Memory not forgotten: confirmation was unavailable or declined.");
+          if (!ctx.hasUI || !await ctx.ui.confirm("Forget this project memory?", `${memory.topic}\n${memory.text}\nRelated consolidated records and pending project learning will also be removed; original chats remain.`)) throw new Error("Memory not forgotten: confirmation was unavailable or declined.");
           signal?.throwIfAborted();
           learner?.pause();
           db.forget(scope, memory.id);
@@ -246,8 +350,16 @@ export default function (pi: ExtensionAPI) {
         let data: any;
         switch (action) {
           case "": case "help":
-            await show(ctx, `${HELP}\n\nStorage: ${path}\nScope: ${root}\n${JSON.stringify(db.stats(scope), null, 2)}`); return;
+            await show(ctx, `${HELP}\n\nStorage: ${path}\nScope: ${root}\n${JSON.stringify({ ...db.stats(scope), admission: learner?.admission }, null, 2)}`); return;
           case "list": data = db.list(target); break;
+          case "retired": data = db.list(target, 100, true); break;
+          case "changes": data = db.changes(target); break;
+          case "undo":
+            learner?.pause();
+            data = db.undo(target, safeText(value, 80, "Change ID"));
+            resetEvidence(ctx);
+            recalled = [];
+            break;
           case "search": data = db.search(target, safeText(value, 1000, "Query")); break;
           case "show": data = db.get(target, safeText(value, 80, "ID"), true); break;
           case "export": data = { exportedAt: new Date().toISOString(), memories: db.list(target, 100) }; break;
@@ -276,6 +388,17 @@ export default function (pi: ExtensionAPI) {
               if (value === "on") learner?.wake();
             } else recalled = [];
             data = db.stats(scope); break;
+          case "budget": {
+            if (global) throw new Error("Budget is machine-local, not a global memory.");
+            if (value) {
+              const [key, number, extra] = value.split(/\s+/);
+              if (extra || !number) throw new Error("Use /memory budget pause|resume|fallback|quota NUMBER");
+              learner?.pause();
+              db.setBudget(key, Number(number));
+              learner?.wake();
+            }
+            data = { policy: db.budget(), fallback: db.dailyBudget(), quota: db.dailyBudget("quota"), admission: learner?.admission }; break;
+          }
           case "retry": db.retry(target); learningError = false; learner?.wake(); data = db.stats(target); break;
           default: throw new Error("Unknown memory command. Run /memory for help.");
         }
