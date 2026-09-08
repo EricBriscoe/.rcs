@@ -2,7 +2,7 @@
 
 Opt-in priority failover for ChatGPT Plus/Pro **Codex OAuth** accounts. It preserves normal `openai-codex/<model>` IDs and never uses an OpenAI API key or paid API fallback.
 
-`setup-pi.sh` installs the pinned `proper-lockfile` dependency from this extension's lockfile during a normal setup; `--skip-install` deliberately does not install it. After installation/restart:
+Setup bootstraps `proper-lockfile` from the lockfile; Pi launches check latest. `--skip-install` only links. After restart:
 
 ```text
 /codex-pool add personal browser

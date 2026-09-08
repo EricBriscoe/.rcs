@@ -1,15 +1,15 @@
 # Efficiency / RTK
 
-Pi runs commands **unchanged, once**. Successful supported Bash output passes through pinned [RTK](https://github.com/rtk-ai/rtk) `pipe --filter`; Node/Python passing-test lines have a native reducer. No extra model calls or tool schemas. `read`, `grep`, `find`, LSP, user `!` commands, and monitors are unchanged.
+Pi runs commands **unchanged, once**. Supported successful Bash output passes through [RTK](https://github.com/rtk-ai/rtk) `pipe --filter`; Node/Python passing-test lines use a native reducer. No model calls or tool schemas. Other tools, user `!` commands and monitors stay unchanged.
 
-Auto filters: normal git diffs, porcelain-v1 status, cargo/pytest/ctest/Vitest success output, and plain file:line grep results. Unknown formats, complex shell commands, errors, detected warnings, oversized output, missing RTK, filter failures, and non-beneficial reductions stay raw. This is deliberately narrower than upstream rewrites.
+Filters: ordinary Git diffs/porcelain-v1 status, cargo/pytest/ctest/Vitest success, plain file:line grep. Diagnostics, failures, complex commands, unknown formats, oversized output, missing RTK and non-beneficial reductions stay raw. Ordinary `git log` lacks RTK's required delimiters and stays raw.
 
-Why not the upstream hook? Its rewrite path reads Claude settings. We install no `rtk init`, hooks, instructions, discovery/history scanners, or telemetry. Filter subprocesses use isolated HOME/cwd and disabled TOML filters/telemetry; original commands retain their normal environment. Ordinary `git log` stays raw: RTK's pipe filter requires injected delimiters. Native Pi adds the pinned binary to its PATH for explicit use; explicit RTK commands are not the automatic isolation boundary.
+Filter processes use isolated HOME/cwd, disabled TOML filters/telemetry; original commands keep their environment. No `rtk init`, hooks or history scanners. Explicit RTK commands are not this isolation boundary.
 
-`/output raw|auto` controls this session. Prefix one Bash call with `# pi:raw` to bypass reduction. Read the returned raw artifact for exact patches or omitted details—**never rerun side effects for output**. Reductions are lossy and labelled; failures retain native output/error status. Raw capture precedes reduction (≤2 MB); larger native logs retain Pi's existing file link. Keep at most 100 generated artifacts/session.
+`/output raw|auto` controls the session; `# pi:raw` bypasses one Bash result. Read the returned artifact for exact output—**never replay side effects**. Capture ≤2 MB; larger results retain native log links. At most 100 artifacts/session.
 
-`/tokens [all]` records each instrumented session independently, including memory learning, compaction, and branch summaries. Use Pi's `/session` and the subagent fleet for delegated usage; this extension does not re-count their aggregate. Provider tokens and before/after tool-result bytes are distinct; neither proves bill/quota savings. Only new reported usage is counted; errors without usage are unknown.
+`/tokens [all]` separates provider-reported usage from tool-result byte reductions, including recovery metadata. Neither measures subscription/billing savings. Each instrumented session is independent; Pi `/session` and subagent fleet own delegated totals. Failures without usage are unknown; no history import. Terminal `rtk gain` estimates savings for explicit RTK commands, not Pi's automatic filters.
 
-State: agent-directory `efficiency/usage.sqlite`, private per-session raw output folders and isolated `rtk-home`. Permissions 0700/0600; logs may contain secrets, are unencrypted, and must not enter Git/Obsidian. Metadata stores no commands/prompts/source bodies. Stop Pi before deleting state; no automatic session-history import or global cleanup.
+Private state: agent-directory `efficiency/usage.sqlite`, raw output and isolated `rtk-home` (0700/0600). Logs can contain secrets, are unencrypted, and never belong in Git/Obsidian. Metadata contains no commands/prompts/source. Stop Pi before deleting state.
 
-Install/update: pin release/checksums in `pi/rtk.json`, run `./setup-pi.sh`. No remote installer scripts. Tests: `node --test tests/pi-efficiency*.test.mjs`; `PI_RTK_LIVE=1` also tests the real pinned binary.
+Setup installs `~/.local/bin/rtk`; Pi and terminal share the selected release. See [update policy](../../skills/pi-maintenance/SKILL.md). Tests: `node --test tests/pi-efficiency*.test.mjs`; `PI_RTK_LIVE=1` also runs real RTK fixtures.

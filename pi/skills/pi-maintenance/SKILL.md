@@ -4,18 +4,26 @@ description: Configure or develop this Pi harness, its extensions, tools, launch
 ---
 # Pi maintenance
 
-Resolve `${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/settings.json`: its target is `<checkout>/pi/settings.json`. Work in that checkout, not an assumed cwd. Inspect Git status and preserve unrelated changes.
+Resolve `${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/settings.json` to `<checkout>/pi/settings.json`. Work there; inspect Git status and preserve changes.
 
 | Source | Purpose |
 |---|---|
-| `pi/settings.json`, `pi/AGENTS.md` | Defaults, lean global rules |
-| `pi/version`, `pi/playwright-version`, `pi/rtk.json`, `pi/code-navigation.json` | Version/checksum pins |
+| `pi/settings.json`, `pi/models.json`, `pi/AGENTS.md` | Defaults, model budgets, lean global rules |
+| `pi/version`, `pi/playwright-version`, `pi/rtk.json`, `pi/code-navigation.json` | Bootstrap/recovery versions and recipes |
 | `pi/extensions/<name>/` | Native extension and adjacent README |
-| `pi/launch.mjs`, `pi/native-resources.mjs` | Standard Pi startup with the RTK environment |
+| `pi/launch.mjs`, `pi/update-deps.mjs`, `pi/rtk.mjs` | Launch-time updates and shared RTK |
 | `pi/skills/`, `pi/prompts/` | On-demand resources |
 | `setup-pi.sh`, `tests/`, `README.md` | Installation, regression tests, usage |
 
-Read installed Pi API docs/examples before changing extension contracts. Preserve symlinks; extension directory names must match source siblings. Declare npm packages with exact versions in `pi/settings.json`; use standard Pi discovery. Subagent controls belong upstream, not in a new custom policy layer. Keep details here or in the relevant README, not global instructions.
+Read installed API docs/examples before changing extension contracts. Preserve symlinks and sibling directory names. Keep `pi-subagents` unversioned; use stock discovery, updates and controls. Put details here or in extension READMEs, not global instructions.
+
+Markdown budget: automatically trim redundancy, preserving safety rules, commands and limits. If useful content cannot reasonably fit, raise caps gradually. No confirmation needed; other check/commit rules still apply.
+
+Codex Astra: 416,384 context budget − 16,384 default reserve = ~400K compaction. Other models unchanged. Open `/model` or restart to reload overrides; provider limits apply.
+
+Each top-level launch checks latest stable Pi, pi-subagents, Playwright/Chromium, RTK, proper-lockfile and managed navigation tools. No CI/approval gate, npm scripts, Node/Homebrew upgrades or session restarts. Verify RTK checksums. State: agent-directory `updates/`, never `.rcs` definitions. Install only used navigation recipes; preserve custom/system servers. Failures warn/retry next launch; rollback is not guaranteed.
+
+Recovery: `PI_AUTO_UPDATE=0 pi --no-extensions` or `--offline`. Nested/child launches skip updates. `PI_AUTO_UPDATE=0 ./setup-pi.sh` uses bootstrap core/browser versions; `--skip-install` only relinks.
 
 From the checkout:
 
@@ -26,6 +34,6 @@ node --test tests/pi-*.test.mjs
 git diff --check
 ```
 
-Capture long test logs locally; report totals/failures, not every passing test. Check new files too. Run `./setup-pi.sh` for changed pins; `--skip-install` for links only. Navigation changes require `PI_CODE_NAV_LIVE=1 node --test tests/pi-code-navigation*.test.mjs`; RTK changes require `PI_RTK_LIVE=1 node --test tests/pi-efficiency*.test.mjs`. Browser changes need a live search and local interaction test.
+Capture logs locally; report totals/failures. Check new files too. Navigation: `PI_CODE_NAV_LIVE=1 node --test tests/pi-code-navigation*.test.mjs`; RTK: `PI_RTK_LIVE=1 node --test tests/pi-efficiency*.test.mjs`. Browser changes require live search/local interaction tests.
 
-Restart through the native launcher for new extensions/startup changes; `/reload` refreshes already-loaded resources. Report checks. Commit/push only when authorized. Machine-local state stays under the agent directory, never Git or Obsidian; each Mac logs in separately.
+Restart for new extensions/startup changes; `/reload` refreshes loaded resources. Commit/push only when authorized. State stays outside Git/Obsidian; log in separately on each Mac.

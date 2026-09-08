@@ -1,6 +1,6 @@
 import { getAgentDir, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type, StringEnum } from "@earendil-works/pi-ai";
-import { readFile, realpath, stat, access } from "node:fs/promises";
+import { realpath, stat, access } from "node:fs/promises";
 import { constants } from "node:fs";
 import { join, dirname, relative, resolve, basename, isAbsolute } from "node:path";
 import { homedir } from "node:os";
@@ -9,6 +9,7 @@ import { recipeCommand, astCommand, executable } from "./packages.ts";
 import { Navigation, bounded } from "./navigation.ts";
 import { structuralSearch } from "./ast.ts";
 import { redact } from "../memory/policy.ts";
+import { effectiveNavigation } from "../efficiency/runtime.mjs";
 
 export function searchTools(active: string[], args: string[]) {
   const flags = ["--tools", "-t", "--no-tools", "-nt", "--no-builtin-tools", "-nbt", "--exclude-tools", "-xt"];
@@ -43,7 +44,7 @@ export default function (pi: ExtensionAPI) {
     if (!(await stat(root)).isDirectory()) throw new Error("Navigation root must be a directory.");
     if (!pins) {
       const source = dirname(await realpath(join(getAgentDir(), "settings.json")));
-      pins = JSON.parse(await readFile(join(source, "code-navigation.json"), "utf8"));
+      pins = effectiveNavigation(dirname(source), getAgentDir());
     }
     if (stopped) throw new Error("Code navigation session is closed.");
     state ??= new NavState(stateDir);

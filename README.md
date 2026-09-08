@@ -16,13 +16,13 @@ pi
 
 Full setup configures Homebrew PATH, shell/editor tools, oh-my-zsh, fzf, virtualenvwrapper/`~/.venvs`, symlinks, and Pi. Optional local shell integrations load only when present. Neovim bootstraps lazy.nvim/Mason on first launch; `:Lazy sync` updates plugins.
 
-Pi setup ensures Node ≥22.19, ripgrep, fd, pinned Pi/Playwright/Chromium, checksum-pinned RTK, and `pi-subagents`. It backs up conflicting Pi resources; `--skip-install` only relinks. Extension links retain source directory names for sibling imports and migrate recognized old `rcs-` links without deleting user replacements.
+Pi setup ensures Node ≥22.19, ripgrep, fd, Pi/Playwright/Chromium, checksum-verified RTK, and `pi-subagents`. It backs up conflicting Pi resources; `--skip-install` only relinks. Extension links retain source directory names for sibling imports and migrate recognized old `rcs-` links without deleting user replacements.
 
 On each Mac, `/login openai-codex`. Default: Astra/high; `/model` or `/thinking`, then Ctrl+S, saves defaults through the settings symlink. To sync: commit/push authorized source changes, then `git pull --ff-only`, rerun setup, restart Pi. Credentials and runtime state remain machine-local.
 
 ## Pi
 
-The launcher at `${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/bin/pi` adds pinned RTK to PATH and otherwise uses standard Pi resource discovery. Settings, owned extensions, and skills are linked from this checkout; npm packages are declared in `pi/settings.json`. The optional project-context extension also loads a real `.pi/AGENTS.md` from the trusted starting workspace.
+The launcher at `${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/bin/pi` checks latest stable dependencies on every launch and uses standard Pi discovery. `PI_AUTO_UPDATE=0 pi --no-extensions` bypasses updates for repair. Versions stay machine-local; no update PRs or test gate. Settings, owned extensions, and skills are linked from this checkout; npm packages are declared in `pi/settings.json`. The optional project-context extension also loads a real `.pi/AGENTS.md` from the trusted starting workspace.
 
 | Feature | Usage / reference |
 |---|---|
@@ -33,7 +33,7 @@ The launcher at `${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/bin/pi` adds pinned RTK
 | Questions | `ask_user`: choices or text; Escape/blank/unavailable UI is not approval. Interactive/RPC only. |
 | Monitors | Background command output wakes Pi; bounded buffers, session-owned, stopped on exit/switch. Stop unused watchers. |
 | Commit | `/skill:schlep`: stage all non-ignored changes and make one commit; **no push**. [Skill](pi/skills/schlep/SKILL.md) |
-| Maintenance | Durable sources/pins/checks in [pi-maintenance](pi/skills/pi-maintenance/SKILL.md), loaded only for Pi work. |
+| Maintenance | Sources/update policy/checks in [pi-maintenance](pi/skills/pi-maintenance/SKILL.md), loaded only for Pi work. |
 
 `web_search` uses Bing or DuckDuckGo without an API key; `web_browse` reads/interacts with pages, screenshots, and localhost apps. Both use separate temporary Playwright profiles, not your normal browser. Open returned URLs before citing content. Login/CAPTCHA requires human input. Use `headed: true` to show a new browser; close before changing mode.
 
@@ -52,8 +52,8 @@ Tests use the installed Pi package. Optional live checks:
 
 | Environment | Test glob | Effects |
 |---|---|---|
-| `PI_RTK_LIVE=1` | `tests/pi-efficiency*.test.mjs` | Pinned RTK fixtures |
-| `PI_CODE_NAV_LIVE=1` | `tests/pi-code-navigation*.test.mjs` | Pinned local servers/AST tooling |
+| `PI_RTK_LIVE=1` | `tests/pi-efficiency*.test.mjs` | RTK fixtures |
+| `PI_CODE_NAV_LIVE=1` | `tests/pi-code-navigation*.test.mjs` | Managed servers/AST tooling |
 | `PI_WEB_LIVE=1` | `tests/pi-web.test.mjs` | Chromium/local page; also verify public search separately |
 | `PI_MEMORY_LIVE=1` | `tests/pi-memory-live.test.mjs` | Synthetic provider extraction |
 

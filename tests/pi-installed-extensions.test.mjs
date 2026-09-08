@@ -19,7 +19,7 @@ test("migrated installer links load sibling imports in both Pi CLI distributions
   await mkdir(join(agent, "extensions"), { recursive: true });
   await mkdir(cwd);
   for (const name of names) await symlink(join(checkout, "pi/extensions", name), join(agent, "extensions", `rcs-${name}`));
-  const env = { ...process.env, PI_CODING_AGENT_DIR: agent, PI_OFFLINE: "1" };
+  const env = { ...process.env, HOME: root, PI_CODING_AGENT_DIR: agent, PI_OFFLINE: "1" };
   await exec("/bin/bash", [join(checkout, "setup-pi.sh"), "--skip-install"], { cwd, env });
   // This checks owned links, separately from the installed upstream package test.
   const settings = JSON.parse(await readFile(join(agent, "settings.json"), "utf8"));

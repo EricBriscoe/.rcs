@@ -6,6 +6,6 @@
   "showCacheMissNotices": true,
   "lastChangelogVersion": "0.85.1",
   "packages": [
-    "npm:pi-subagents@0.66.0"
+    "npm:pi-subagents"
   ]
 }
