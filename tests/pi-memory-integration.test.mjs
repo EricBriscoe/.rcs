@@ -12,11 +12,16 @@ import { MemoryStore } from "../pi/extensions/memory/store.ts";
 const packageDir = join(execFileSync("npm", ["root", "-g"], { encoding: "utf8" }).trim(), "@earendil-works/pi-coding-agent");
 const { clearExtensionCache, loadExtensionsCached } = await import(pathToFileURL(join(packageDir, "dist/core/extensions/loader.js")).href);
 
-async function fixture(t, { trusted = true, history = [] } = {}) {
+async function fixture(t, { trusted = true, history = [], embeddingAgent } = {}) {
   const root = await mkdtemp(join(tmpdir(), "pi memory integration "));
   const source = join(root, "checkout/pi/extensions/memory");
   const agent = join(root, "agent");
   const project = join(root, "project");
+  if (embeddingAgent) {
+    const { embeddingHome } = await import('../pi/extensions/memory/embedding-config.mjs');
+    await mkdir(join(embeddingHome(agent), '..'), { recursive: true });
+    await symlink(embeddingHome(embeddingAgent), embeddingHome(agent));
+  }
   await mkdir(join(agent, "extensions"), { recursive: true });
   await mkdir(project);
   await cp(new URL("../pi/extensions/memory/", import.meta.url), source, { recursive: true });
@@ -439,6 +444,34 @@ test('native memory commands expose retirement and undo; concurrent retirement i
     assert.equal(db.get(scope, alias.id).active, 1); assert.equal(db.get(scope, alias.id).manual, 1);
     assert.equal(db.get(scope, first.id).text, first.text);
     assert.equal((await f.tool({ action: 'status' })).details.retired, 0);
+    assert.deepEqual(f.notifications, []);
+  } finally { db.close(); }
+});
+
+test('installed symlink loads the real local worker and injects semantic recall without persisting it', { skip: !process.env.PI_MEMORY_EMBEDDING_AGENT }, async t => {
+  const f = await fixture(t, { embeddingAgent: process.env.PI_MEMORY_EMBEDDING_AGENT });
+  await f.command('remember outage | When the service is unavailable, roll back to the last working release.');
+  const saved = JSON.parse(f.views.at(-1));
+  const db = new MemoryStore(join(f.agent, 'memory/memory.sqlite'));
+  try {
+    await waitFor(() => db.db.prepare('SELECT count(*) n FROM memory_vectors').get().n === 1);
+    const prompt = 'Restore the previous deployment if production goes down.';
+    assert.deepEqual(db.search(saved.scope, prompt), []);
+    await f.emit('before_agent_start', { prompt });
+    const messages = [{ role: 'user', content: prompt, timestamp: 1 }];
+    const context = await f.emit('context', { messages });
+    assert.equal(context.messages[0].customType, 'rcs-memory-context');
+    assert.match(context.messages[0].content, /roll back/);
+    assert.equal(f.entries.length, 0);
+    assert.equal(f.requests.length, 0);
+    assert.match((await f.tool({ action: 'status' })).details.retrieval, /^hybrid/);
+    await f.command('read off');
+    assert.equal((await f.emit('context', { messages: context.messages })).messages.length, 1);
+    await f.command('read on');
+    await f.reload();
+    assert.equal(db.db.prepare('SELECT count(*) n FROM memory_vectors').get().n, 1);
+    await f.command(`forget ${saved.id}`);
+    assert.equal(db.db.prepare('SELECT count(*) n FROM memory_vectors').get().n, 0);
     assert.deepEqual(f.notifications, []);
   } finally { db.close(); }
 });

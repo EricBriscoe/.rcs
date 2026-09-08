@@ -11,6 +11,8 @@ import { Learner } from "./learner.ts";
 import { capture, GLOBAL_SCOPE, KINDS, memoryContext, projectIdentity, redact, safeText, topicKey } from "./policy.ts";
 import { MemoryStore } from "./store.ts";
 import { memoryStatus } from "./status.ts";
+import { LocalEmbedding } from './embedding.ts';
+import { HybridRetrieval } from './retrieval.ts';
 
 import { recordUsage } from "../efficiency/usage.ts";
 
@@ -35,6 +37,7 @@ const HELP = `Memory commands (current repository, shared across worktrees; exac
 /memory export                   Inspect/copy a JSON export (up to 100 memories)
 /memory global <list|show|remember|restore|pin|unpin|forget|export> ...
 Global writes require this explicit command; automatic learning and tools cannot promote project facts globally.
+Local embeddings: setup-pi.sh installs them; recover with node pi/install-memory-embedding.mjs, then /reload. No foreground downloads; unavailable/slow inference uses FTS.
 No historical imports. Original chats and exports are not deleted by forgetting. Known-secret filtering is best effort.
 Learning sends bounded, filtered user/assistant text to the configured Pi model while idle; tools/files/thinking are excluded.`;
 
@@ -42,6 +45,8 @@ export default function (pi: ExtensionAPI) {
   let activeContext: ExtensionContext | undefined;
   let store: MemoryStore | undefined;
   let learner: Learner | undefined;
+  let retrieval: HybridRetrieval | undefined;
+  let recallEpoch = 0;
   let scope = "";
   let root = "";
   let seen = new Set<string>();
@@ -55,7 +60,9 @@ export default function (pi: ExtensionAPI) {
 
   function status(ctx: ExtensionContext) {
     if (!store) { ctx.ui.setStatus("rcs-memory", "memory: unavailable"); return; }
-    ctx.ui.setStatus("rcs-memory", memoryStatus(store.stats(scope), learner?.admission, learningError));
+    const learning = memoryStatus(store.stats(scope), learner?.admission, learningError);
+    const search = retrieval?.status;
+    ctx.ui.setStatus("rcs-memory", [learning, search && search !== 'hybrid' ? `memory: ${search}` : undefined].filter(Boolean).join(' · ') || undefined);
   }
 
   function requireStore(ctx: ExtensionContext): MemoryStore {
@@ -99,6 +106,9 @@ export default function (pi: ExtensionAPI) {
 
   async function close() {
     activeContext = undefined;
+    recallEpoch++;
+    retrieval?.close();
+    retrieval = undefined;
     await learner?.close();
     learner = undefined;
     store?.close();
@@ -119,6 +129,9 @@ export default function (pi: ExtensionAPI) {
       learningError = false;
       activeContext = ctx;
       const idle = () => !!activeContext && activeContext.isIdle() && activeContext.isProjectTrusted();
+      retrieval = new HybridRetrieval(store, new LocalEmbedding(agent), scope, () => !!activeContext?.isProjectTrusted(), idle);
+      store.retrieval = retrieval;
+      retrieval.wake();
       let selectedModel: ExtensionContext["model"];
       let service: any;
       const stockHold = (admission: Admission): Admission => selectedModel?.provider === "openai-codex" && !admission.accountId
@@ -229,18 +242,24 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
-  pi.on("before_agent_start", (event, ctx) => {
+  pi.on("before_agent_start", async (event, ctx) => {
     learner?.pause();
     recalled = [];
     timestamp = Date.now();
+    const epoch = ++recallEpoch;
+    const db = store;
     try {
-      if (store && ctx.isProjectTrusted()) recalled = store.recall(scope, redact(event.prompt)).map((memory) => memory.id);
+      if (db && ctx.isProjectTrusted()) {
+        const rows = await db.candidates(scope, redact(event.prompt), 8, { signal: ctx.signal, allowed: () => store === db && epoch === recallEpoch && ctx.isProjectTrusted() });
+        if (store === db && epoch === recallEpoch && ctx.isProjectTrusted()) recalled = db.recallRows(scope, rows).map(memory => memory.id);
+      }
       status(ctx);
     } catch { ctx.ui.setStatus("rcs-memory", "memory: recall unavailable"); }
   });
   pi.on("session_tree", (_event, ctx) => {
     learner?.pause();
     resetEvidence(ctx);
+    recallEpoch++;
     recalled = [];
     status(ctx);
     learner?.wake();
@@ -305,8 +324,8 @@ export default function (pi: ExtensionAPI) {
       let data;
       if (["search", "get"].includes(params.action) && !db.control(scope).reading) throw new Error("Memory recall is off. The user can enable it with /memory read on.");
       switch (params.action) {
-        case "status": data = { root, ...db.stats(scope) }; break;
-        case "search": data = db.search(scope, safeText(params.query, 1000, "Query")); break;
+        case "status": data = { root, ...db.stats(scope), retrieval: retrieval?.status }; break;
+        case "search": data = await db.candidates(scope, safeText(params.query, 1000, "Query"), 8, { signal, allowed: () => store === db && ctx.isProjectTrusted() }); break;
         case "get": data = db.get(scope, safeText(params.id, 80, "ID")); break;
         case "save": {
           const topic = topicKey(params.topic);
@@ -349,7 +368,7 @@ export default function (pi: ExtensionAPI) {
         let data: any;
         switch (action) {
           case "": case "help":
-            await show(ctx, `${HELP}\n\nStorage: ${path}\nScope: ${root}\n${JSON.stringify({ ...db.stats(scope), admission: learner?.admission }, null, 2)}`); return;
+            await show(ctx, `${HELP}\n\nStorage: ${path}\nScope: ${root}\n${JSON.stringify({ ...db.stats(scope), admission: learner?.admission, retrieval: retrieval?.status }, null, 2)}`); return;
           case "list": data = db.list(target); break;
           case "retired": data = db.list(target, 100, true); break;
           case "changes": data = db.changes(target); break;
@@ -359,7 +378,9 @@ export default function (pi: ExtensionAPI) {
             resetEvidence(ctx);
             recalled = [];
             break;
-          case "search": data = db.search(target, safeText(value, 1000, "Query")); break;
+          case "search": data = db.control(scope).reading
+            ? await db.candidates(target, safeText(value, 1000, "Query"), 8, { allowed: () => store === db && ctx.isProjectTrusted() })
+            : db.search(target, safeText(value, 1000, "Query")); break;
           case "show": data = db.get(target, safeText(value, 80, "ID"), true); break;
           case "export": data = { exportedAt: new Date().toISOString(), memories: db.list(target, 100) }; break;
           case "remember": case "restore": {
@@ -385,7 +406,7 @@ export default function (pi: ExtensionAPI) {
             if (action === "learn") {
               resetEvidence(ctx);
               if (value === "on") learner?.wake();
-            } else recalled = [];
+            } else { recallEpoch++; recalled = []; }
             data = db.stats(scope); break;
           case "budget": {
             if (global) throw new Error("Budget is machine-local, not a global memory.");

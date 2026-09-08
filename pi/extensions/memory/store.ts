@@ -9,11 +9,14 @@ import { DatabaseSync } from "node:sqlite";
 import { GLOBAL_SCOPE, hash, KINDS, safeText, searchTerms, topicKey } from "./policy.ts";
 import type { Candidate, Payload } from "./policy.ts";
 
+export type RetrievalOptions = { purpose?: 'reading' | 'learning'; signal?: AbortSignal; allowed?: () => boolean };
+
 export class MemoryStore {
   db: DatabaseSync;
   now: () => number;
   closed = false;
   maintenanceAt = 0;
+  retrieval?: { search: (scope: string, query: string, limit: number, options: RetrievalOptions) => Promise<any[]> };
 
   constructor(path: string, now = Date.now) {
     this.now = now;
@@ -30,7 +33,7 @@ export class MemoryStore {
       this.db.exec("PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA secure_delete=ON;");
       this.transaction(() => {
         const version = this.db.prepare("PRAGMA user_version").get()!.user_version;
-        if (![0, 1, 2, 3, 4].includes(Number(version))) throw new Error("Unsupported memory database version.");
+        if (![0, 1, 2, 3, 4, 5].includes(Number(version))) throw new Error("Unsupported memory database version.");
         if (version === 1) {
           // Only the disposable index changes; canonical notes and tombstones stay.
           this.db.exec("DROP TRIGGER IF EXISTS memory_insert; DROP TRIGGER IF EXISTS memory_update; DROP TRIGGER IF EXISTS memory_delete; DROP TABLE IF EXISTS memory_fts;");
@@ -76,7 +79,24 @@ export class MemoryStore {
           CREATE TABLE IF NOT EXISTS job_totals(scope TEXT PRIMARY KEY,tokens INTEGER NOT NULL DEFAULT 0);
           CREATE TABLE IF NOT EXISTS job_receipts(id TEXT PRIMARY KEY);
           CREATE TABLE IF NOT EXISTS lineage(source_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,target_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,PRIMARY KEY(source_id,target_id));
-          PRAGMA user_version=4;
+          CREATE TABLE IF NOT EXISTS memory_vectors(memory_id TEXT PRIMARY KEY REFERENCES memories(id) ON DELETE CASCADE,
+            model TEXT NOT NULL, revision INTEGER NOT NULL, digest TEXT NOT NULL, vector BLOB NOT NULL);
+          CREATE TABLE IF NOT EXISTS retrieval_state(id INTEGER PRIMARY KEY CHECK(id=1),epoch INTEGER NOT NULL);
+          INSERT OR IGNORE INTO retrieval_state VALUES(1,0);
+          CREATE TRIGGER IF NOT EXISTS vector_update AFTER UPDATE ON memories BEGIN
+            DELETE FROM memory_vectors WHERE memory_id=old.id;
+            UPDATE retrieval_state SET epoch=epoch+1;
+          END;
+          CREATE TRIGGER IF NOT EXISTS vector_delete AFTER DELETE ON memories BEGIN
+            UPDATE retrieval_state SET epoch=epoch+1;
+          END;
+          CREATE TRIGGER IF NOT EXISTS vector_insert AFTER INSERT ON memories BEGIN
+            UPDATE retrieval_state SET epoch=epoch+1;
+          END;
+          CREATE TRIGGER IF NOT EXISTS vector_controls AFTER UPDATE ON controls BEGIN
+            UPDATE retrieval_state SET epoch=epoch+1;
+          END;
+          PRAGMA user_version=5;
         `);
         const columns = this.db.prepare("PRAGMA table_info(memories)").all().map(row => row.name);
         if (!columns.includes("active")) this.db.exec("ALTER TABLE memories ADD COLUMN active INTEGER NOT NULL DEFAULT 1; ALTER TABLE memories ADD COLUMN retired_by TEXT;");
@@ -143,20 +163,31 @@ export class MemoryStore {
       .all(scope, GLOBAL_SCOPE, Number(!retired), Math.min(100, Math.max(1, limit))).map((row) => this.decode(row));
   }
 
-  search(scope: string, query: string, limit = 8): any[] {
+  search(scope: string, query: string, limit = 8, includeGlobal = true): any[] {
     const terms = searchTerms(query);
     if (!terms.length) return [];
     const match = terms.map((term) => `"${term}"`).join(" OR ");
     return this.db.prepare(`SELECT m.* FROM memory_fts JOIN memories m ON m.rowid=memory_fts.rowid
       WHERE memory_fts MATCH ? AND m.scope IN (?,?) AND m.active=1 ORDER BY bm25(memory_fts,8,4,1),m.updated_at DESC LIMIT ?`)
-      .all(match, scope, GLOBAL_SCOPE, Math.min(30, Math.max(1, limit))).map((row) => this.decode(row));
+      .all(match, scope, includeGlobal ? GLOBAL_SCOPE : scope, Math.min(30, Math.max(1, limit))).map((row) => this.decode(row));
   }
 
-  recall(scope: string, query: string): any[] {
+  async candidates(scope: string, query: string, limit = 8, options: RetrievalOptions = {}): Promise<any[]> {
+    if (this.retrieval) return this.retrieval.search(scope, query, limit, options);
+    return this.search(scope, query, limit);
+  }
+
+  retrievalEpoch(): number { return Number(this.db.prepare('SELECT epoch FROM retrieval_state WHERE id=1').get()!.epoch); }
+
+  recallRows(scope: string, candidates: any[]): any[] {
     if (!this.control(scope).reading) return [];
     const pinned = this.db.prepare("SELECT * FROM memories WHERE scope IN (?,?) AND pinned=1 AND active=1 ORDER BY updated_at DESC LIMIT 4")
       .all(scope, GLOBAL_SCOPE).map((row) => this.decode(row));
-    return [...new Map([...pinned, ...this.search(scope, query)].map((row) => [row.id, row])).values()].slice(0, 8);
+    return [...new Map([...pinned, ...candidates].map((row) => [row.id, row])).values()].slice(0, 8);
+  }
+
+  recall(scope: string, query: string): any[] {
+    return this.recallRows(scope, this.search(scope, query));
   }
 
   blocked(scope: string): string[] {
