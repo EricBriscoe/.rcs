@@ -1,6 +1,6 @@
 # .rcs
 
-macOS zsh, tmux, Neovim, SQLFluff, and Pi configuration; home-directory links point here.
+macOS shell, editor, and Pi configuration.
 
 ## Install / sync
 
@@ -14,31 +14,31 @@ export PATH="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/bin:$PATH"
 pi
 ```
 
-Full setup configures Homebrew PATH, shell/editor tools, oh-my-zsh, fzf, virtualenvwrapper/`~/.venvs`, symlinks, and Pi. Optional local shell integrations load only when present. Neovim bootstraps lazy.nvim/Mason on first launch; `:Lazy sync` updates plugins.
+Full setup installs shell/editor tools and links these files. Optional local shell integrations load when present. Neovim installs plugins on first launch; `:Lazy sync` updates them.
 
-Pi setup ensures Node ≥22.19, ripgrep, fd, Pi/Playwright/Chromium, checksum-verified RTK, and `pi-subagents`. It backs up conflicting Pi resources; `--skip-install` only relinks. Extension links retain source directory names for sibling imports and migrate recognized old `rcs-` links without deleting user replacements.
+Pi setup installs Node ≥22.19, ripgrep, fd, Pi, Playwright/Chromium, checksum-verified RTK, and `pi-subagents`. Conflicts are backed up; `--skip-install` only relinks.
 
-On each Mac, `/login openai-codex`. Default: Astra/high; `/model` or `/thinking`, then Ctrl+S, saves defaults through the settings symlink. To sync: commit/push authorized source changes, then `git pull --ff-only`, rerun setup, restart Pi. Credentials and runtime state remain machine-local.
+On each Mac, `/login openai-codex` uses your OpenAI subscription. `/model` or `/thinking`, then Ctrl+S, saves defaults through the settings symlink. To sync: commit/push authorized source changes, then `git pull --ff-only`, rerun setup, restart Pi. Credentials stay local.
 
 ## Pi
 
-The launcher at `${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/bin/pi` checks latest stable dependencies on every launch and uses standard Pi discovery. `PI_AUTO_UPDATE=0 pi --no-extensions` bypasses updates for repair. Versions stay machine-local; no update PRs or test gate. Settings, owned extensions, themes, and skills are linked from this checkout; npm packages are declared in `pi/settings.json`. The optional project-context extension also loads a real `.pi/AGENTS.md` from the trusted starting workspace.
+`${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/bin/pi` checks stable updates on launch. For repair: `PI_AUTO_UPDATE=0 pi --no-extensions`. Settings, extensions, themes, and skills link here; packages are in `pi/settings.json`. Project context can load the trusted workspace's `.pi/AGENTS.md`.
 
 | Feature | Usage / reference |
 |---|---|
 | Appearance | Quiet Graphite + compact footer; Paper alternative in `/settings`. `/appearance compact\|stock`. [Guide](pi/extensions/appearance/README.md) |
-| File/code search | Native `grep` (ripgrep), `find`, `ls`; read-only LSP/ast-grep. First-use assessment covers relevant languages. `/code-nav [reassess]`. [Guide](pi/extensions/code-navigation/README.md) |
-| Quiet output / RTK | Automatic supported-output filtering; raw artifacts, no command replay. `/output raw\|auto`, `/tokens [all]`. [Guide](pi/extensions/efficiency/README.md) |
-| Memory | Automatic scoped recall/idle learning. `/memory` controls/search; consumes model quota. Start Pi in the target repo—shell `cd` does not rescope it. [Guide](pi/extensions/memory/README.md) |
-| Subagents | Stock `pi-subagents`: delegation, workflows, fleet inspector, and worktrees. `/subagents-guide`, `/subagents-fleet`, `/subagents-models`. [Setup](pi/SUBAGENTS.md) |
+| File/code search | Native search plus read-only LSP/ast-grep. `/code-nav [reassess]`. [Guide](pi/extensions/code-navigation/README.md) |
+| Quiet output / RTK | Filtered output; raw artifacts retained. `/output raw\|auto`, `/tokens [all]`. [Guide](pi/extensions/efficiency/README.md) |
+| Memory | `/memory`: recall/learning; uses quota. Start in the target repo; shell `cd` does not change scope. [Guide](pi/extensions/memory/README.md) |
+| Subagents | Stock delegation, workflows, fleet, and worktrees. `/subagents-guide`, `/subagents-fleet`, `/subagents-models`. [Setup](pi/SUBAGENTS.md) |
 | Questions | `ask_user`: choices or text; Escape/blank/unavailable UI is not approval. Interactive/RPC only. |
-| Monitors | Background command output wakes Pi; bounded buffers, session-owned, stopped on exit/switch. Stop unused watchers. |
+| Monitors | Command output wakes Pi. Session-owned; stop unused watchers. |
 | Commit | `/skill:schlep`: stage all non-ignored changes and make one commit; **no push**. [Skill](pi/skills/schlep/SKILL.md) |
-| Maintenance | Sources/update policy/checks in [pi-maintenance](pi/skills/pi-maintenance/SKILL.md), loaded only for Pi work. |
+| Maintenance | See [pi-maintenance](pi/skills/pi-maintenance/SKILL.md). |
 
-`web_search` uses Bing or DuckDuckGo without an API key; `web_browse` reads/interacts with pages, screenshots, and localhost apps. Both use separate temporary Playwright profiles, not your normal browser. Open returned URLs before citing content. Login/CAPTCHA requires human input. Use `headed: true` to show a new browser; close before changing mode.
+`web_search` uses Bing/DuckDuckGo without a key. `web_browse` supports pages, screenshots, and localhost. Both use temporary Playwright profiles. Open URLs before citing them. Login/CAPTCHA needs human input. `headed: true` shows the browser; close it before changing mode.
 
-Keep auth, sessions, memories, task logs, navigation tooling, raw output, caches, and browser profiles outside Git/Obsidian. Private permissions are not encryption or an OS sandbox. Delegation follows upstream `pi-subagents` behavior, without the retired custom restrictions. Restart after setup; `/reload` refreshes already-loaded resources.
+Keep credentials and runtime data outside Git/Obsidian. Permissions are not encryption or a sandbox. Subagents follow upstream behavior. Restart after setup; `/reload` refreshes loaded resources.
 
 ## Checks
 
@@ -60,41 +60,38 @@ Tests use the installed Pi package. Optional live checks:
 
 Run as `ENV=1 node --test <glob>`; live model tests use existing login, never copied credentials.
 
-## Local overrides
+## Machine-local config
 
-- `~/.zshrc.local`: machine/work-specific paths, secrets, functions; sourced last.
-- `nvim/lua/local.lua` (ignored): optional `biome`, `ruff`, `python` executable paths and `dbs()` connection map for Dadbod. Missing overrides fall back to PATH/empty connections.
+`~/.zshrc.local` loads last for private paths, secrets, and shell functions. Optional, gitignored `nvim/lua/plugins/local.lua` supplies lazy.nvim specs; return `{}` if none. Append functions to `require("util.project").db_sources` for dadbod-ui connections (`{ name = connection_url }`).
 
-## Shell / tmux
+## Shell and other files
 
-`zshrc`: robbyrussell/git theme, daily compinit cache, fnm/zoxide/fzf/virtualenvwrapper, Homebrew Python, branch tab titles. Auto-venv prefers repository `venv/`, then `~/.venvs/<Git-common-root-name>` across worktrees; only deactivates environments it activated.
+[zshrc](zshrc) uses oh-my-zsh/robbyrussell, optional tool integrations, daily compinit caching, and branch tab titles. It selects Homebrew Python for virtualenvwrapper. Directory changes activate `<git-root>/venv` or `~/.venvs/<main-repo-name>` across worktrees; only these environments are deactivated automatically.
 
-- `olc [parent]`: open branch-changed files in VS Code; parent from reflog, else `main`.
-- `cleandocker`: confirms destructive container/image/volume/network/cache cleanup.
-- `claude-work` / `claude-personal`: separate Claude config directories; unrelated to Pi.
-- `tmux.conf`: window titles enabled.
+- `olc [parent]`: open branch changes in VS Code; parent comes from the reflog, else main.
+- `cleandocker`: confirm, then remove all containers and prune Docker data.
+- `claude-work` / `claude-personal`: separate account config directories.
+- `codex-work` / `codex-personal`: separate login/runtime state; shared config, instructions, skills, plugins, hooks, policies, memories, and automations.
+
+[tmux.conf](tmux.conf) uses pane titles. [sqlfluff/](sqlfluff/) sets Postgres style; project config overrides it. [keyboards/](keyboards/) holds a VIA layout; setup does not install it.
 
 ## Neovim
 
-Configuration: [options](nvim/lua/config/options.lua), [terminal](nvim/lua/config/terminal.lua), [language tools](nvim/lua/plugins/language.lua), [navigation](nvim/lua/plugins/navigation.lua), [git](nvim/lua/plugins/git.lua), [SQL](nvim/lua/plugins/sql.lua). Plugin pins: `nvim/lazy-lock.json`; language file owns the Mason server/formatter/linter list.
+[nvim/](nvim/) uses LazyVim. `lazyvim.json` selects extras; `lazy-lock.json` pins plugins. Extras cover Python, TypeScript/Biome/ESLint, SQL, Terraform, Docker, YAML/JSON/TOML, Markdown, Git, Rust, Prettier, and neotest. Prettier requires project config.
 
-Uses lazy.nvim, which-key, lazydev, blink.cmp/snippets, Mason/LSP, conform/nvim-lint, fzf-lua, gitsigns, and Dadbod. Format-on-save excludes append-only `db/deltas/` SQL. Actionlint runs on workflow YAML. Leader is Space:
+`lua/util/project.lua` resolves Git/worktree roots, mainline, venvs, and `.env` files. Git roots take priority over LSP roots. Python uses `<root>/venv`, `<root>/.venv`, then `$WORKON_HOME/<main-repo-name>` (default `~/.venvs`). Without a root it can use `$VIRTUAL_ENV`. The selected venv supplies Python and Ruff when available. Biome uses the nearest config and ancestor `node_modules/.bin/biome`, else PATH. ESLint needs both config and an installed binary.
+
+`lua/plugins/` configures language tools and navigation. Format on save uses project tools. SQL uses Postgres formatting without diagnostics; `db/deltas/` is exempt. Indentation is four spaces, two for Lua. `.tf`/`.tofu` use Terraform; Compose uses its language server; Swift uses sourcekit-lsp.
+
+Leader: Space; `<space>sk` lists mappings.
 
 | Keys | Action |
 |---|---|
-| `<space><space>` | Files |
-| `<space>sg` / `sw` / `se` | Grep / word / branch-changed files with diff preview |
-| `<space>sb` / `sr` / `sk` | Buffers / recent / keymaps |
-| `<space>f` / `uf` | Format / toggle buffer autoformat |
-| `<C-/>` or `<space>tt` | Terminal |
-| `K`, `gd`, `gr`, `gi`, `gD` | Hover, definition, references, implementation, declaration |
-| `<space>rn` / `ca` | Rename / code action |
-| `]d` / `[d`, `]c` / `[c` | Diagnostics, hunks |
-| `<space>gs` / `gr` / `gS` / `gR` | Stage/reset hunk, stage/reset buffer |
-| `<space>gp` / `gb` / `gB` / `gd` / `gD` | Preview / blame / toggle blame / index diff / HEAD diff |
-| `<space>D` | DB UI |
-| `:olc` / `:Olc` | Tabs for branch-changed files; skips existing tabs |
+| `<space>gw` / `<space>se` | Worktrees / branch edits with diff preview |
+| `:Olc` or `:olc` | Load branch changes as buffers |
+| `<space>D` | Database UI |
+| `<space>tt` / `<space>tr` / `<space>ts` | Test file / nearest / summary |
+| `<space>cv` / `<space>gg` | Venv picker / lazygit |
+| `<space>uf` / `<space>uF` | Toggle format globally / for buffer |
 
-Global autoformat toggle: `:lua vim.g.disable_autoformat = true`.
-
-`sqlfluff/config`: Postgres, uppercase keywords/literals/functions/types, snake_case, four spaces, trailing commas, leading AND/OR, unlimited line length; project `.sqlfluff` overrides. `keyboards/id80_ansi_layout_mine.json` is a VIA layout, not installed.
+Outside Mason, install Neovim, ripgrep, fd, fzf, lazygit, tree-sitter-cli, rust-analyzer, a C compiler, and a terminal Nerd Font.
