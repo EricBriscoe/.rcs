@@ -270,3 +270,175 @@ test("untrusted projects neither open a memory store nor submit extraction reque
   await assert.rejects(f.tool({ action: "status" }), /untrusted/);
   assert.equal(f.requests.length, 0);
 });
+
+test("model changes abort old learning and the next idle batch uses only the newly selected provider/model", async t => {
+  const f = await fixture(t);
+  let entered;
+  f.complete(async (_model, _context, options) => {
+    entered = options;
+    return new Promise(() => {});
+  });
+  f.entries.push(user("u1", "Use pnpm for dependencies."));
+  await f.emit("agent_settled");
+  await waitFor(() => entered);
+  f.ctx.model = { provider: "another-fixture", id: "selected-new" };
+  await f.emit("model_select", { model: f.ctx.model });
+  assert.equal(entered.signal.aborted, true);
+  f.complete(async () => ({ stopReason: "stop", usage: { totalTokens: 1 }, content: [{ type: "text", text: '{"memories":[]}' }] }));
+  await waitFor(() => f.requests.length === 2);
+  assert.equal(f.requests[1][0], f.ctx.model);
+  assert.equal(f.requests[1][0].provider, "another-fixture");
+  await waitFor(async () => (await f.tool({ action: "status" })).details.jobs.some(j => j.state === "done"));
+  assert.ok(f.statuses.some(([, text]) => text?.includes("fallback")));
+});
+
+test("machine-local budget command validates settings; tools cannot mutate it", async t => {
+  const f = await fixture(t);
+  await f.command("budget fallback 5");
+  const stats = (await f.tool({ action: "status" })).details;
+  assert.equal(stats.budget.fallback, 5);
+  await f.command("budget pause 90");
+  assert.equal((await f.tool({ action: "status" })).details.budget.pause, 30);
+  assert.ok(f.notifications.some(([message]) => message.includes("pause < resume")));
+});
+
+for (const code of ["usage_limit_reached", "rate_limit_exceeded"]) {
+  test(`stock Codex fallback classifies original structured ${code} without account scraping`, async t => {
+    const f = await fixture(t);
+    const previousFetch = globalThis.fetch;
+    const reset = Math.floor(Date.now() / 1000) + 120;
+    let calls = 0;
+    globalThis.fetch = async () => { calls++; return new Response(JSON.stringify({ error: { code, resets_at: reset } }), { status: 429 }); };
+    t.after(() => { globalThis.fetch = previousFetch; });
+    f.ctx.model = { provider: "openai-codex", id: "fixture-codex" };
+    await f.emit("model_select", { model: f.ctx.model });
+    f.complete(async (_model, _context, options) => {
+      assert.equal(options.transport, "sse"); assert.equal(options.maxRetries, 0);
+      await options.onPayload({});
+      await options.fetch("https://synthetic.invalid", {});
+      return { stopReason: "error", errorMessage: "opaque adapter error", usage: { totalTokens: 0 }, content: [] };
+    });
+    f.entries.push(user("stock-u", "Use pnpm for dependencies."));
+    await f.emit("agent_settled");
+    await waitFor(() => calls === 1);
+    await waitFor(async () => (await f.tool({ action: "status" })).details.jobs.some(j => j.state === "pending"));
+    const store = new MemoryStore(join(f.agent, "memory/memory.sqlite"));
+    try {
+      const job = store.db.prepare("SELECT attempts,ready_at FROM jobs").get();
+      assert.equal(job.attempts, code === "usage_limit_reached" ? 0 : 1);
+      if (code === "usage_limit_reached") {
+        assert.equal(job.ready_at, reset * 1000);
+        assert.equal(store.stockQuotaAdmission().nextAt, reset * 1000);
+        const scope = store.db.prepare("SELECT scope FROM jobs").get().scope;
+        store.enqueue(scope, { session: "second-session", entries: [{ id: "second", role: "user", text: "Use pnpm" }] });
+        await f.reload();
+        f.entries.push(user("new-after-restart", "Use pnpm for new work."));
+        await f.emit("agent_settled");
+        await delay(1400);
+        assert.equal(calls, 1, "another session and fresh capture remain unsent after restart before stock reset");
+        assert.equal(store.db.prepare("SELECT count(*) AS n FROM jobs WHERE payload IS NOT NULL").get().n, 3);
+      }
+      assert.equal(store.dailyBudget().used, 1);
+    } finally { store.close(); }
+    assert.equal(f.requests[0][0].provider, "openai-codex");
+  });
+}
+
+test("agent_settled queues every UTF-8 capture chunk and preserves unqueued evidence after queue pressure", async t => {
+  const f = await fixture(t);
+  f.ctx.isIdle = () => false;
+  const db = new MemoryStore(join(f.agent, "memory/memory.sqlite")); t.after(() => db.close());
+  const { projectIdentity } = await import("../pi/extensions/memory/policy.ts");
+  const { scope } = await projectIdentity(f.ctx.cwd);
+  for (let i = 0; i < 49; i++) db.enqueue(scope, { session: "filler", entries: [{ id: `f${i}`, role: "user", text: `Filler ${i}` }] });
+  const request = "界".repeat(5000), answer = "語".repeat(5000);
+  f.entries.push(user("large-user", request), assistant("large-assistant", answer));
+  await f.emit("agent_settled");
+  let queued = db.db.prepare("SELECT payload FROM jobs WHERE session='fixture-session'").all().map(r => JSON.parse(r.payload));
+  assert.equal(queued.length, 1);
+  assert.equal(queued[0].entries[0].text, request);
+  db.db.exec("DELETE FROM jobs WHERE session='filler'");
+  await f.emit("agent_settled");
+  queued = db.db.prepare("SELECT payload FROM jobs WHERE session='fixture-session' ORDER BY rowid").all().map(r => JSON.parse(r.payload));
+  assert.equal(queued.length, 2);
+  assert.equal(queued[1].entries.find(e => e.id === "large-assistant").text, answer);
+  assert.ok(queued[1].entries.some(e => e.id === "large-user" && e.text.length > 0));
+  assert.ok(queued.every(p => Buffer.byteLength(JSON.stringify(p)) <= 28000));
+  await f.emit("agent_settled");
+  assert.equal(db.db.prepare("SELECT count(*) AS n FROM jobs").get().n, 2);
+  assert.equal(f.requests.length, 0);
+});
+
+test("returned usage after cancellation keeps immutable submission session and model attribution", async t => {
+  const f = await fixture(t);
+  let resolve;
+  f.complete(() => new Promise(done => { resolve = done; }));
+  f.entries.push(user("usage-user", "Use pnpm"));
+  await f.emit("agent_settled"); await waitFor(() => resolve);
+  f.ctx.model = { provider: "changed", id: "changed" };
+  f.ctx.sessionManager.getSessionId = () => "changed-session";
+  await f.emit("before_agent_start", { prompt: "foreground" });
+  resolve({ stopReason: "aborted", content: [], usage: { input: 7, output: 4, totalTokens: 11 } });
+  const { usageReport } = await import("../pi/extensions/efficiency/usage.ts");
+  await waitFor(() => usageReport(f.agent, "fixture-session")?.models.length);
+  const report = usageReport(f.agent, "fixture-session");
+  assert.equal(report.models[0].model, "fixture/fixture");
+  assert.equal(report.models[0].total, 11); assert.equal(report.models[0].calls, 1);
+  assert.equal(usageReport(f.agent, "changed-session").models.length, 0);
+  assert.equal((await f.tool({ action: "status" })).details.memories, 0);
+});
+
+test("stock fetch rechecks a shared hold recorded after admission and refunds the unsent reservation", async t => {
+  const f = await fixture(t);
+  const previousFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => { calls++; throw new Error("must remain unsent"); };
+  t.after(() => { globalThis.fetch = previousFetch; });
+  f.ctx.model = { provider: "openai-codex", id: "fixture-codex" };
+  await f.emit("model_select", { model: f.ctx.model });
+  f.complete(async (_model, _context, options) => {
+    const other = new MemoryStore(join(f.agent, "memory/memory.sqlite"));
+    try { other.holdStockQuota(Date.now() + 120000); } finally { other.close(); }
+    await options.fetch("https://synthetic.invalid", {});
+    throw new Error("unreachable");
+  });
+  f.entries.push(user("held-before-fetch", "Use pnpm")); await f.emit("agent_settled");
+  await waitFor(() => f.requests.length === 1);
+  await waitFor(async () => (await f.tool({ action: "status" })).details.jobs.some(j => j.state === "pending"));
+  const db = new MemoryStore(join(f.agent, "memory/memory.sqlite"));
+  try {
+    assert.equal(calls, 0); assert.equal(db.dailyBudget().used, 0);
+    assert.equal(db.db.prepare("SELECT attempts FROM jobs").get().attempts, 0);
+  } finally { db.close(); }
+});
+
+test('native memory commands expose retirement and undo; concurrent retirement invalidates active recall', async t => {
+  const f = await fixture(t);
+  const { projectIdentity, parseCandidates } = await import('../pi/extensions/memory/policy.ts');
+  const { scope } = await projectIdentity(f.ctx.cwd);
+  const db = new MemoryStore(join(f.agent, 'memory/memory.sqlite'));
+  try {
+    const make = (topic, text) => ({ topic, text, kind: 'decision', keywords: 'pnpm dependencies', sources: [{ session: 'old', entry: topic, role: 'user', quote: text }] });
+    const first = db.save(scope, make('packages', 'Use pnpm for frontend dependencies.'));
+    const alias = db.save(scope, make('legacy', 'Keep npm for legacy scripts.'));
+    await f.emit('before_agent_start', { prompt: 'pnpm dependencies legacy' });
+    const messages = [{ role: 'user', content: 'pnpm dependencies', timestamp: 1 }];
+    assert.match((await f.emit('context', { messages })).messages[0].content, new RegExp(alias.id));
+    const text = 'Use pnpm for frontend dependencies; keep npm for legacy scripts.';
+    const payload = { session: 'fresh', entries: [{ id: 'u', role: 'user', text }] };
+    const existing = [first, alias];
+    const candidates = parseCandidates(JSON.stringify({ memories: [{ action: 'merge', topic: first.topic, text, kind: 'decision', targets: existing.map(({ id, revision }) => ({ id, revision })), reason: 'User clarified the same dependency policy.', evidence: [{ entry: 'u', quote: text }] }] }), payload, existing);
+    db.enqueue(scope, payload); const change = db.finish(db.claim(scope), candidates, 0, existing)[0];
+    const refreshed = (await f.emit('context', { messages })).messages[0].content;
+    assert.doesNotMatch(refreshed, new RegExp(alias.id)); assert.match(refreshed, /pnpm/);
+    await f.command('retired'); assert.equal(JSON.parse(f.views.at(-1))[0].id, alias.id);
+    await f.command('changes'); assert.equal(JSON.parse(f.views.at(-1))[0].id, change.changeId);
+    await f.reload();
+    await f.command(`undo ${change.changeId}`);
+    assert.equal(JSON.parse(f.views.at(-1)).undone, change.changeId);
+    assert.equal(db.get(scope, alias.id).active, 1); assert.equal(db.get(scope, alias.id).manual, 1);
+    assert.equal(db.get(scope, first.id).text, first.text);
+    assert.equal((await f.tool({ action: 'status' })).details.retired, 0);
+    assert.deepEqual(f.notifications, []);
+  } finally { db.close(); }
+});

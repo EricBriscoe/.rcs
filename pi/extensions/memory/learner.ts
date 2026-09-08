@@ -1,3 +1,5 @@
+import { BackgroundDeferred } from "./budget.ts";
+import type { Admission } from "./budget.ts";
 import { EXTRACTION_PROMPT, parseCandidates } from "./policy.ts";
 import type { MemoryStore } from "./store.ts";
 
@@ -16,20 +18,23 @@ export async function abortable<T>(promise: Promise<T>, signal: AbortSignal): Pr
 export class Learner {
   store: MemoryStore;
   scope: string;
-  complete: (system: string, input: string, signal: AbortSignal) => Promise<{ text: string; tokens: number }>;
+  complete: (system: string, input: string, signal: AbortSignal, admission?: Admission, onDeferred?: (error: BackgroundDeferred) => void) => Promise<{ text: string; tokens: number }>;
   idle: () => boolean;
   changed: (error?: boolean) => void;
   timer?: ReturnType<typeof setTimeout>;
   controller?: AbortController;
   running?: Promise<void>;
   closed = false;
+  admission?: Admission;
+  admit: (signal: AbortSignal) => Promise<Admission>;
 
-  constructor(store: MemoryStore, scope: string, complete: Learner["complete"], idle: () => boolean, changed: Learner["changed"]) {
+  constructor(store: MemoryStore, scope: string, complete: Learner["complete"], idle: () => boolean, changed: Learner["changed"], admit: Learner["admit"] = async () => ({ allowed: true, mode: "fallback" })) {
     this.store = store;
     this.scope = scope;
     this.complete = complete;
     this.idle = idle;
     this.changed = changed;
+    this.admit = admit;
   }
 
   wake(delay = 1200) {
@@ -37,7 +42,8 @@ export class Learner {
     clearTimeout(this.timer);
     this.timer = setTimeout(() => {
       this.timer = undefined;
-      if (this.running || !this.idle()) return;
+      if (this.running) { this.wake(delay); return; }
+      if (!this.idle()) return;
       this.running = this.run().catch(() => { this.notify(true); }).finally(() => { this.running = undefined; });
     }, delay);
     this.timer.unref();
@@ -48,26 +54,54 @@ export class Learner {
   async run() {
     let retry = false;
     try {
+      this.store.maintain();
       for (let n = 0; n < 3 && !this.closed && this.idle(); n++) {
-        const job = this.store.claim(this.scope);
-        if (!job) break;
-        this.controller = new AbortController();
-        const signal = this.controller.signal;
-        const deadline = setTimeout(() => this.controller?.abort("timeout"), 60000);
+        this.store.expireJobs();
+        if (!this.store.hasPending(this.scope)) {
+          const nextAt = this.store.nextReadyAt(this.scope);
+          if (nextAt) { this.admission = { allowed: false, mode: this.admission?.mode ?? "fallback", reason: "queued backoff", nextAt }; this.notify(); }
+          break;
+        }
+        const controller = new AbortController();
+        this.controller = controller;
+        const signal = controller.signal;
+        const deadline = setTimeout(() => controller.abort("timeout"), 60000);
+        let job: any;
+        let submissionDeferral: BackgroundDeferred | undefined;
         deadline.unref();
         try {
+          this.admission = await abortable(this.admit(signal), signal);
+          if (!this.admission.allowed || signal.aborted || !this.idle()) { this.notify(); break; }
+          job = this.store.claim(this.scope, this.admission.mode);
+          if (!job) {
+            const daily = this.store.dailyBudget(this.admission.mode);
+            this.admission = { ...this.admission, allowed: false, reason: daily.nextAt ? "daily budget" : "queue leased or unavailable", nextAt: daily.nextAt };
+            this.notify(); break;
+          }
+          this.notify();
           const query = job.payload.entries.filter((entry: any) => entry.role === "user").map((entry: any) => entry.text).join("\n");
           const existing = this.store.search(this.scope, query, 12).filter((memory) => memory.scope === this.scope)
-            .map(({ topic, text, manual }) => ({ topic, text, manual }));
-          const input = JSON.stringify({ conversation: job.payload, existing, blockedTopics: this.store.blocked(this.scope) });
-          const output = await abortable(this.complete(EXTRACTION_PROMPT, input, signal), signal);
-          if (!this.idle()) this.controller.abort("paused");
+            .map(({ id, revision, topic, kind, text, keywords, sources, manual, pinned, evidence_at }) => ({ id, revision, topic, kind, text, keywords, sources, manual, pinned, evidence_at }));
+          // Evidence is never trimmed here. Optional dedup context yields to the JSON cap;
+          // tombstones are also enforced transactionally on every proposed save.
+          const data = { conversation: job.payload, existing, blockedTopics: this.store.blocked(this.scope) };
+          while (Buffer.byteLength(JSON.stringify(data)) > 30000 && data.existing.length) data.existing.pop();
+          while (Buffer.byteLength(JSON.stringify(data)) > 30000 && data.blockedTopics.length) data.blockedTopics.pop();
+          const input = JSON.stringify(data);
+          if (Buffer.byteLength(input) > 30000) throw new Error("Extraction JSON exceeds budget.");
+          const output = await abortable(this.complete(EXTRACTION_PROMPT, input, signal, this.admission, error => { submissionDeferral ??= error; }), signal);
+          if (!this.idle()) controller.abort("paused");
           if (signal.aborted || this.closed) throw new Error("Cancelled");
-          this.store.finish(job, parseCandidates(output.text, job.payload), output.tokens);
+          if (Buffer.byteLength(output.text) > 30000) throw new Error("Extraction output exceeds budget.");
+          this.store.finish(job, parseCandidates(output.text, job.payload, data.existing), output.tokens, data.existing);
           this.notify();
-        } catch {
-          const cancelled = signal.aborted && signal.reason !== "timeout";
-          this.store.fail(job, cancelled);
+        } catch (error) {
+          // Classification is published before asynchronous pool persistence; abort may win that wait.
+          const failure = submissionDeferral ?? error;
+          const deferred = failure instanceof BackgroundDeferred ? failure : undefined;
+          if (deferred) this.admission = deferred.admission;
+          const cancelled = !!deferred || (signal.aborted && signal.reason !== "timeout");
+          if (job) this.store.fail(job, cancelled, !!deferred && !deferred.submitted, !!deferred, deferred?.admission.nextAt);
           if (!this.closed) this.notify(!cancelled);
           retry = !cancelled;
           break;
@@ -77,13 +111,14 @@ export class Learner {
         }
       }
     } catch { if (!this.closed) this.notify(true); }
-    if (!this.closed && this.idle()) this.wake(retry ? 30000 : 60000);
+    if (!this.closed && this.idle() && !this.timer) this.wake(retry ? 30000 : 60000);
   }
 
   pause() {
     clearTimeout(this.timer);
     this.timer = undefined;
     this.controller?.abort("paused");
+    this.admission = { allowed: false, mode: this.admission?.mode ?? "fallback", reason: "working" };
   }
 
   async close() {

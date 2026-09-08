@@ -67,7 +67,7 @@ test("the stemming-index migration preserves canonical data and rebuilds existin
   assert.deepEqual(store.search("A", "dependencies"), []);
   const migrated = new MemoryStore(path);
   try {
-    assert.equal(migrated.db.prepare("PRAGMA user_version").get().user_version, 2);
+    assert.equal(migrated.db.prepare("PRAGMA user_version").get().user_version, 4);
     assert.equal(migrated.search("A", "dependencies")[0].id, saved.id);
     assert.equal(migrated.get("A", saved.id).manual, 1);
     migrated.forget("A", saved.id);
@@ -274,16 +274,16 @@ test("redaction runs before capture; no tools, files, thinking, old history or i
     { id: "memory", type: "custom_message", customType: "rcs-memory-context", content: "old remembered preference" },
     assistant("a1", "I used pnpm."),
   ];
-  const result = capture(entries, new Set(["old"]), "session", new Set(["old"]));
+  const [result] = capture(entries, new Set(["old"]), "session", new Set(["old"]));
   assert.deepEqual(result.entries.map((entry) => entry.id), ["u1", "a1"]);
   const text = JSON.stringify(result);
   for (const secret of ["hidden-value", "super private", "secret file contents", "hidden reasoning", "old preference"]) assert.ok(!text.includes(secret));
-  assert.equal(capture(entries, new Set(entries.map((entry) => entry.id)), "session"), undefined);
+  assert.deepEqual(capture(entries, new Set(entries.map((entry) => entry.id)), "session"), []);
 });
 
 test("capture always reserves user evidence and respects both text and escaped-JSON budgets", () => {
   const entries = [user("u1", '"'.repeat(5000)), ...Array.from({ length: 4 }, (_, i) => assistant(`a${i}`, '"'.repeat(5000)))];
-  const captured = capture(entries, new Set(), "session");
+  const [captured] = capture(entries, new Set(), "session");
   assert.ok(captured.entries.some((entry) => entry.id === "u1"));
   assert.ok(captured.entries.reduce((n, entry) => n + entry.text.length, 0) <= 18000);
   assert.ok(JSON.stringify(captured).length <= 30000);
@@ -301,8 +301,8 @@ test("topic keys cannot bypass secret filtering, including embedded token prefix
 
 test("compaction checkpoints reuse the task request but never cross a revocation/startup baseline", () => {
   const entries = [user("u1", "Use pnpm"), assistant("a1", "This configuration resolved the issue.")];
-  assert.deepEqual(capture(entries, new Set(["u1"]), "s").entries.map((entry) => entry.id), ["u1", "a1"]);
-  assert.equal(capture(entries, new Set(["u1"]), "s", new Set(["u1"])), undefined);
+  assert.deepEqual(capture(entries, new Set(["u1"]), "s")[0].entries.map((entry) => entry.id), ["u1", "a1"]);
+  assert.deepEqual(capture(entries, new Set(["u1"]), "s", new Set(["u1"])), []);
 });
 
 test("extraction requires faithful citations and user evidence for preferences, not assistant guesses", () => {
@@ -380,7 +380,7 @@ test("reload cancels a provider that ignores abort, requeues durably and cannot 
   assert.equal(store.list("A").length, 0);
   const job = store.claim("A");
   assert.ok(job);
-  assert.equal(job.attempts, 1, "interrupted calls do not exhaust retries");
+  assert.equal(job.attempts, 2, "submitted interruptions remain bounded attempts");
 });
 
 test("invalid extraction fails atomically without persisting model output", async (t) => {

@@ -16,23 +16,26 @@ test("live model learns a correction, supersedes it and abstains on routine chat
   t.after(async () => { store.close(); await rm(root, { recursive: true, force: true }); });
   async function extract(id, text, extraEntries = []) {
     const payload = { session: `synthetic-${id}`, entries: [{ id, role: "user", text }, ...extraEntries] };
+    const existing = store.list("fixture");
     const pending = promisify(execFile)("pi", [
       "--offline", "--no-session", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-themes", "--no-approve", "--no-tools", "--thinking", "off",
-      "--system-prompt", EXTRACTION_PROMPT, "--print", "--", JSON.stringify({ conversation: payload, existing: store.list("fixture"), blockedTopics: [] }),
+      "--system-prompt", EXTRACTION_PROMPT, "--print", "--", JSON.stringify({ conversation: payload, existing, blockedTopics: [] }),
     ], { cwd: root, timeout: 75000, maxBuffer: 1024 * 1024 });
     // Pi also reads piped stdin; execFile leaves that pipe open unless we end it.
     pending.child.stdin.end();
     const { stdout } = await pending;
-    return parseCandidates(stdout, payload);
+    const candidates = parseCandidates(stdout, payload, existing);
+    store.enqueue("fixture", payload);
+    store.finish(store.claim("fixture"), candidates, 0, existing);
+    return candidates;
   }
   const first = await extract("u1", "Correction: for this repository, always use pnpm rather than npm to install dependencies. This is our accepted package-manager policy.");
   assert.ok(first.length > 0, "explicit durable correction should be learned");
-  for (const candidate of first) store.save("fixture", candidate);
   const old = store.search("fixture", "dependencies")[0];
   assert.ok(old, `Dependency recall missed the generated memory: ${JSON.stringify(first)}`);
   assert.match(old.text, /pnpm/i);
   const second = await extract("u2", "We've now switched this repository to Bun. Use bun, not pnpm, to install dependencies from now on. This replaces our earlier pnpm policy.");
-  for (const candidate of second) store.save("fixture", candidate);
+  assert.ok(second.some(candidate => candidate.consolidation?.action === "supersede"));
   const current = store.get("fixture", old.id, true);
   assert.match(current.text, /bun/i, "the model should reuse the prior stable topic");
   assert.ok(current.sources.some((source) => source.entry === "u2"));

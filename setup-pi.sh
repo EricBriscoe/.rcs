@@ -55,6 +55,7 @@ if ! "$skip_install"; then
     "@playwright/cli@$playwright_version"
   PLAYWRIGHT_SKIP_BROWSER_GC=1 playwright-cli install-browser chromium
   node "$REPO/pi/install-rtk.mjs"
+  npm ci --ignore-scripts --omit=dev --prefix "$REPO/pi/extensions/codex-account-pool"
 fi
 
 pi_agent_dir="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
@@ -87,7 +88,7 @@ link_resource "$REPO/pi/settings.json" "$pi_agent_dir/settings.json" settings
 link_resource "$REPO/pi/AGENTS.md" "$pi_agent_dir/AGENTS.md" instructions
 # Keep sibling names identical to the checkout: Pi's TypeScript loader resolves
 # ../memory imports relative to the symlink path, not its canonical target.
-for extension in web ask-user monitor memory project-context code-navigation efficiency; do
+for extension in web ask-user monitor memory project-context code-navigation efficiency codex-account-pool; do
   source="$REPO/pi/extensions/$extension"
   link_resource "$source" "$pi_agent_dir/extensions/$extension" extension
   # Retire only our old prefixed link; preserve user-owned replacements.
@@ -113,7 +114,7 @@ fi
 
 printf 'Pi settings linked to %s/pi/settings.json\n' "$REPO"
 printf 'Pi web tools linked to %s/pi/extensions/web\n' "$REPO"
-printf 'Pi question, monitor and memory tools linked to %s/pi/extensions/\n' "$REPO"
+printf 'Pi question, monitor, memory, and Codex account-pool extensions linked to %s/pi/extensions/\n' "$REPO"
 printf 'Pi-native launcher linked to %s/bin/pi\n' "$pi_agent_dir"
 printf 'The launcher adds pinned RTK to PATH; resources use standard Pi discovery. Restart Pi after setup.\n'
 printf 'Run pi in a project. On a new Mac, use /login openai-codex to sign in.\n'

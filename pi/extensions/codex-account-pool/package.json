@@ -1,0 +1,8 @@
+{
+  "name": "pi-codex-account-pool",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "proper-lockfile": "4.1.2"
+  }
+}
