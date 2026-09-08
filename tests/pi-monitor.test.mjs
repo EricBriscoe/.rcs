@@ -85,6 +85,132 @@ test("monitor messages drain only new stdout/stderr and include the exit status"
   assert.equal(monitorMessage(manager), undefined);
 });
 
+test("completion jobs stay quiet during output and unrelated live batches, then deliver once", async (t) => {
+  let notifications = 0;
+  const { manager, cwd } = await fixture(t, { onUpdate: () => notifications++ });
+  const gate = join(cwd, "finish");
+  const job = await manager.start(nodeCommand(`
+    const fs = require('node:fs');
+    process.stdout.write('intermediate output');
+    const timer = setInterval(() => {
+      if (fs.existsSync(${JSON.stringify(gate)})) {
+        process.stderr.write('final error');
+        clearInterval(timer);
+        process.exitCode = 3;
+      }
+    }, 10);
+  `), cwd, "completion");
+  await waitFor(() => manager.get(job.id).output.length > 0);
+  assert.equal(notifications, 0);
+  assert.equal(manager.hasPending(), false);
+  assert.equal(monitorMessage(manager), undefined);
+  assert.equal(manager.list()[0].notifyOn, "completion");
+
+  const live = await manager.start("printf live", cwd, "output");
+  await waitFor(() => finished(manager, live.id));
+  assert.deepEqual(monitorMessage(manager).details.monitors.map(({ id }) => id), [live.id]);
+  assert.equal(manager.hasPending(), false);
+  assert.ok(manager.get(job.id).output.length > 0, "Live delivery must not drain a running completion job.");
+
+  await writeFile(gate, "done");
+  await waitFor(() => finished(manager, job.id));
+  const update = monitorMessage(manager).details.monitors[0];
+  assert.equal(update.id, job.id);
+  assert.equal(update.exitCode, 3);
+  assert.equal(update.status, "exited");
+  assert.deepEqual(update.chunks, [
+    { stream: "stdout", text: "intermediate output" },
+    { stream: "stderr", text: "final error" },
+  ]);
+  assert.equal(manager.hasPending(), false);
+  assert.equal(monitorMessage(manager), undefined);
+});
+
+test("completion waits for inherited output pipes to close, and explicit reads remain available", async (t) => {
+  const { manager, cwd } = await fixture(t);
+  const gate = join(cwd, "close-pipes");
+  const descendant = `
+    const fs = require('node:fs');
+    process.stdout.write('descendant ready');
+    const timer = setInterval(() => {
+      if (fs.existsSync(${JSON.stringify(gate)})) {
+        process.stdout.write('last bytes');
+        clearInterval(timer);
+      }
+    }, 10);
+  `;
+  const job = await manager.start(nodeCommand(`
+    require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(descendant)}], { stdio: 'inherit' });
+    process.exit(4);
+  `), cwd, "completion");
+  await waitFor(() => manager.get(job.id).exited && manager.get(job.id).output.length > 0);
+  assert.equal(finished(manager, job.id), false);
+  assert.equal(manager.hasPending(), false);
+  assert.equal(monitorMessage(manager), undefined);
+  assert.equal(outputText(manager.drain(job.id)[0]), "descendant ready");
+  assert.deepEqual(manager.drain(), []);
+
+  await writeFile(gate, "done");
+  await waitFor(() => finished(manager, job.id));
+  const update = monitorMessage(manager).details.monitors[0];
+  assert.equal(outputText(update), "last bytes");
+  assert.equal(update.exitCode, 4);
+  assert.equal(monitorMessage(manager), undefined);
+});
+
+test("simultaneous completion results stay bounded without splitting any job across wakeups", async (t) => {
+  const { manager, cwd } = await fixture(t, { outputLimit: 16, drainLimit: 10 });
+  const jobs = [];
+  for (let index = 0; index < 3; index++) {
+    jobs.push(await manager.start("printf 0123456789abcdef", cwd, "completion"));
+  }
+  await waitFor(() => jobs.every(({ id }) => finished(manager, id)));
+  const delivered = [];
+  while (manager.hasPending()) {
+    const updates = monitorMessage(manager).details.monitors;
+    assert.equal(updates.length, 1);
+    assert.equal(outputText(updates[0]), "6789abcdef");
+    assert.equal(updates[0].droppedCharacters, 6);
+    assert.equal(updates[0].exitCode, 0);
+    delivered.push(updates[0].id);
+  }
+  assert.deepEqual(delivered, jobs.map(({ id }) => id));
+  assert.equal(monitorMessage(manager), undefined);
+});
+
+test("noisy live output cannot starve a whole completion result", async (t) => {
+  const { manager, cwd } = await fixture(t, { outputLimit: 16, drainLimit: 10 });
+  const live = await manager.start(nodeCommand("console.log('live output waiting'); setInterval(() => {}, 1000)"), cwd, "output");
+  const job = await manager.start("printf 0123456789", cwd, "completion");
+  await waitFor(() => manager.get(live.id).output.length === 16 && finished(manager, job.id));
+  const update = monitorMessage(manager).details.monitors[0];
+  assert.equal(update.id, job.id);
+  assert.equal(outputText(update), "0123456789");
+  assert.equal(manager.hasPending(), true);
+  assert.equal(monitorMessage(manager).details.monitors[0].id, live.id);
+});
+
+test("silent completion, failure, and explicit stop each retain a final notification", async (t) => {
+  const { manager, cwd } = await fixture(t);
+  for (const code of [0, 7]) {
+    const job = await manager.start(`exit ${code}`, cwd, "completion");
+    await waitFor(() => finished(manager, job.id));
+    const update = monitorMessage(manager).details.monitors[0];
+    assert.equal(update.exitCode, code);
+    assert.deepEqual(update.chunks, []);
+    assert.equal(monitorMessage(manager), undefined);
+  }
+  const job = await manager.start(nodeCommand("console.log('ready'); setInterval(() => {}, 1000)"), cwd, "completion");
+  await waitFor(() => manager.get(job.id).output.length > 0);
+  assert.equal(manager.hasPending(), false);
+  await manager.stop(job.id);
+  const update = monitorMessage(manager).details.monitors[0];
+  assert.equal(update.status, "stopped");
+  assert.equal(update.signal, "SIGTERM");
+  assert.equal(outputText(update), "ready\n");
+  assert.equal(monitorMessage(manager), undefined);
+});
+
 test("real process output is bounded and list does not consume pending output", async (t) => {
   const { manager, cwd } = await fixture(t, { outputLimit: 32, drainLimit: 10 });
   const started = await manager.start(nodeCommand("process.stdout.write('0123456789'.repeat(10))"), cwd);
@@ -123,6 +249,8 @@ test("silent completion is delivered once and consumed records make room for new
 test("invalid starts do not leave a retained monitor", async (t) => {
   const { manager, cwd } = await fixture(t);
   await assert.rejects(manager.start(" ", cwd), /command is required/);
+  await assert.rejects(manager.start("exit 0", cwd, "invalid"), /notifyOn must be/);
+  await assert.rejects(manager.start("exit 0", join(cwd, "missing"), "completion"), /Could not start monitor/);
   await assert.rejects(manager.start("printf fixture", join(cwd, "missing")), /Could not start monitor/);
   assert.deepEqual(manager.list(), []);
   assert.throws(() => manager.drain("missing"), /Unknown monitor/);
@@ -248,7 +376,7 @@ test("output during manual compaction wakes Pi once it becomes idle without an a
 test("session cleanup stops every owned monitor and prevents later starts", async (t) => {
   const { manager, cwd } = await fixture(t);
   const first = await manager.start(nodeCommand("setInterval(() => {}, 1000)"), cwd);
-  const second = await manager.start(nodeCommand("setInterval(() => {}, 1000)"), cwd);
+  const second = await manager.start(nodeCommand("setInterval(() => {}, 1000)"), cwd, "completion");
   await manager.close();
   assert.deepEqual(manager.list(), []);
   for (const pid of [first.pid, second.pid]) {
