@@ -16,7 +16,7 @@ pi
 
 Full setup installs shell/editor tools and links these files. Optional local shell integrations load when present. Neovim installs plugins on first launch; `:Lazy sync` updates them.
 
-Pi setup installs Node ≥22.19, ripgrep, fd, Pi, Playwright/Chromium, checksum-verified RTK, and `pi-subagents`. Conflicts are backed up; `--skip-install` only relinks.
+Pi setup installs Node ≥22.19, ripgrep, fd, Pi, Playwright/Chromium, checksum-verified RTK, and the packages in `pi/settings.json`, including `pi-subagents` and `pi-mcp-adapter`. Conflicts are backed up; `--skip-install` only relinks.
 
 On each Mac, `/login openai-codex` uses your OpenAI subscription. `/model` or `/thinking`, then Ctrl+S, saves defaults through the settings symlink. To sync: commit/push authorized source changes, then `git pull --ff-only`, rerun setup, restart Pi. Credentials stay local.
 
@@ -61,6 +61,8 @@ Tests use the installed Pi package. Optional live checks:
 Run as `ENV=1 node --test <glob>`; live model tests use existing login, never copied credentials.
 
 ## Machine-local config
+
+MCP server connections belong in `~/.config/mcp/mcp.json`, outside this repository. Setup installs the adapter only; configure servers and sign in on each Mac with `/mcp setup` and `/mcp-auth <server>`. Do not also load the installed adapter from a file in `~/.pi/agent/extensions/`; this causes duplicate tool registration.
 
 `~/.zshrc.local` loads last for private paths, secrets, and shell functions. Optional, gitignored `nvim/lua/plugins/local.lua` supplies lazy.nvim specs; return `{}` if none. Append functions to `require("util.project").db_sources` for dadbod-ui connections (`{ name = connection_url }`).
 

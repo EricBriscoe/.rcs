@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import tempfile
@@ -39,7 +40,7 @@ class PiSetupTests(unittest.TestCase):
         self.install_log = Path(self.temp.name) / "install.log"
         scripts = {
             "node": (
-                'if [ "$1" = "-p" ]; then printf "%s\\n" "$PI_SETUP_SUBAGENT_PIN"; fi\n'
+                'if [ "$1" = "-p" ]; then exec "$PI_SETUP_REAL_NODE" "$@"; fi\n'
                 'if [ "$2" = "install" ]; then printf "%s\\n" pi "$2" "$3" '
                 '"npm_config_ignore_scripts=${npm_config_ignore_scripts:-}" >> "$PI_SETUP_TEST_LOG"; fi\n'
                 'if [ "${1##*/}" = "update-deps.mjs" ]; then printf "%s\\n" update-deps >> "$PI_SETUP_TEST_LOG"; fi\n'
@@ -61,6 +62,7 @@ class PiSetupTests(unittest.TestCase):
             executable = fake_bin / name
             executable.write_text("#!/bin/sh\n" + script)
             executable.chmod(0o755)
+        self.env["PI_SETUP_REAL_NODE"] = shutil.which("node")
         self.env["PATH"] = f"{fake_bin}:{self.env['PATH']}"
         self.env["PI_SETUP_TEST_LOG"] = str(self.install_log)
         self.env["PI_SETUP_SUBAGENT_PIN"] = json.loads((REPO / "pi/settings.json").read_text())["packages"][0]
@@ -315,6 +317,8 @@ class PiSetupTests(unittest.TestCase):
             str(REPO / "pi/extensions/codex-account-pool"),
             "pi", "install", self.env["PI_SETUP_SUBAGENT_PIN"],
             "npm_config_ignore_scripts=true",
+            "pi", "install", "npm:pi-mcp-adapter@2.32.1",
+            "npm_config_ignore_scripts=true",
             "update-deps",
         ])
         self.assert_resource_links()
@@ -328,6 +332,7 @@ class PiSetupTests(unittest.TestCase):
         self.assertIn("@playwright/cli@" + (REPO / "pi/playwright-version").read_text().strip(), log)
         self.assertNotIn("update-deps", log)
         self.assertIn("memory-embedding", log)
+        self.assertIn("npm:pi-mcp-adapter@2.32.1", log)
 
     def test_skip_install_never_downloads_embedding_runtime(self):
         self.stub_install_commands()
