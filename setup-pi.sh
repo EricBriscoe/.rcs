@@ -59,6 +59,7 @@ if ! "$skip_install"; then
     "@playwright/cli@$playwright_version"
   PLAYWRIGHT_SKIP_BROWSER_GC=1 playwright-cli install-browser chromium
   node "$REPO/pi/install-rtk.mjs"
+  node "$REPO/pi/install-memory-embedding.mjs"
   npm ci --ignore-scripts --omit=dev --prefix "$REPO/pi/extensions/codex-account-pool"
 fi
 

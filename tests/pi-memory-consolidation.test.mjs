@@ -51,7 +51,7 @@ test('schema v3 migration preserves notes, revisions, quota reservations and que
   db.close();
   const migrated = new MemoryStore(path, db.now);
   try {
-    assert.equal(migrated.db.prepare('PRAGMA user_version').get().user_version, 4);
+    assert.equal(migrated.db.prepare('PRAGMA user_version').get().user_version, 5);
     assert.equal(migrated.get('A', first.id).active, 1);
     assert.equal(migrated.get('A', first.id, true).history[0].text, first.text);
     assert.equal(migrated.liveBatch(job), true);

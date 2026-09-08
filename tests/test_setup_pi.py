@@ -43,6 +43,7 @@ class PiSetupTests(unittest.TestCase):
                 'if [ "$2" = "install" ]; then printf "%s\\n" pi "$2" "$3" '
                 '"npm_config_ignore_scripts=${npm_config_ignore_scripts:-}" >> "$PI_SETUP_TEST_LOG"; fi\n'
                 'if [ "${1##*/}" = "update-deps.mjs" ]; then printf "%s\\n" update-deps >> "$PI_SETUP_TEST_LOG"; fi\n'
+                'if [ "${1##*/}" = "install-memory-embedding.mjs" ]; then printf "%s\\n" memory-embedding >> "$PI_SETUP_TEST_LOG"; fi\n'
                 'exit 0\n'
             ),
             "npm": (
@@ -309,6 +310,7 @@ class PiSetupTests(unittest.TestCase):
             f"@playwright/cli@{playwright_version}",
             "playwright-cli", "install-browser", "chromium",
             "PLAYWRIGHT_SKIP_BROWSER_GC=1",
+            "memory-embedding",
             "npm", "ci", "--ignore-scripts", "--omit=dev", "--prefix",
             str(REPO / "pi/extensions/codex-account-pool"),
             "pi", "install", self.env["PI_SETUP_SUBAGENT_PIN"],
@@ -325,6 +327,13 @@ class PiSetupTests(unittest.TestCase):
         self.assertIn("@earendil-works/pi-coding-agent@" + (REPO / "pi/version").read_text().strip(), log)
         self.assertIn("@playwright/cli@" + (REPO / "pi/playwright-version").read_text().strip(), log)
         self.assertNotIn("update-deps", log)
+        self.assertIn("memory-embedding", log)
+
+    def test_skip_install_never_downloads_embedding_runtime(self):
+        self.stub_install_commands()
+        self.run_setup("--skip-install")
+        self.assertFalse(self.install_log.exists())
+        self.assertFalse((self.agent_dir / "tooling/memory-embedding").exists())
 
     def test_rtk_launcher_conflict_is_backed_up_and_reruns_are_idempotent(self):
         target = Path(self.temp.name) / ".local/bin/rtk"

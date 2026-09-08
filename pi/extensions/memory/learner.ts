@@ -80,7 +80,7 @@ export class Learner {
           }
           this.notify();
           const query = job.payload.entries.filter((entry: any) => entry.role === "user").map((entry: any) => entry.text).join("\n");
-          const existing = this.store.search(this.scope, query, 12).filter((memory) => memory.scope === this.scope)
+          const existing = (await this.store.candidates(this.scope, query, 12, { purpose: 'learning', signal, allowed: () => !this.closed && this.idle() && this.store.liveBatch(job) })).filter((memory) => memory.scope === this.scope)
             .map(({ id, revision, topic, kind, text, keywords, sources, manual, pinned, evidence_at }) => ({ id, revision, topic, kind, text, keywords, sources, manual, pinned, evidence_at }));
           // Evidence is never trimmed here. Optional dedup context yields to the JSON cap;
           // tombstones are also enforced transactionally on every proposed save.
@@ -88,6 +88,8 @@ export class Learner {
           while (Buffer.byteLength(JSON.stringify(data)) > 30000 && data.existing.length) data.existing.pop();
           while (Buffer.byteLength(JSON.stringify(data)) > 30000 && data.blockedTopics.length) data.blockedTopics.pop();
           const input = JSON.stringify(data);
+          if (signal.aborted || this.closed || !this.idle() || !this.store.liveBatch(job))
+            throw new BackgroundDeferred({ allowed: false, mode: this.admission.mode, reason: 'working' });
           if (Buffer.byteLength(input) > 30000) throw new Error("Extraction JSON exceeds budget.");
           const output = await abortable(this.complete(EXTRACTION_PROMPT, input, signal, this.admission, error => { submissionDeferral ??= error; }), signal);
           if (!this.idle()) controller.abort("paused");

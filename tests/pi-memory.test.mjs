@@ -67,7 +67,7 @@ test("the stemming-index migration preserves canonical data and rebuilds existin
   assert.deepEqual(store.search("A", "dependencies"), []);
   const migrated = new MemoryStore(path);
   try {
-    assert.equal(migrated.db.prepare("PRAGMA user_version").get().user_version, 4);
+    assert.equal(migrated.db.prepare("PRAGMA user_version").get().user_version, 5);
     assert.equal(migrated.search("A", "dependencies")[0].id, saved.id);
     assert.equal(migrated.get("A", saved.id).manual, 1);
     migrated.forget("A", saved.id);
