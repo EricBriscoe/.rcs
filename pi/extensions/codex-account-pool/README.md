@@ -2,6 +2,8 @@
 
 Opt-in priority failover for ChatGPT Plus/Pro **Codex OAuth** accounts. It preserves normal `openai-codex/<model>` IDs and never uses an OpenAI API key or paid API fallback.
 
+A separate `/login openai-codex` subscription login can coexist with the pool. While the pool is enabled, requests use the selected pool account and its subscription quota.
+
 Setup bootstraps `proper-lockfile` from the lockfile; Pi launches check latest. `--skip-install` only links. After restart:
 
 ```text
