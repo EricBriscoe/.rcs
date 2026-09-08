@@ -14,8 +14,8 @@ const agentDir = process.env.PI_CODING_AGENT_DIR || join(homedir(), '.pi/agent')
 const npmRoot = join(agentDir, 'npm');
 const installed = join(npmRoot, 'node_modules/pi-subagents');
 
-test('replacement uses a pinned upstream package with dynamic model selection, not role pins or a model allowlist', async () => {
-  assert.ok(settings.packages.includes('npm:pi-subagents@0.66.0'));
+test('replacement tracks upstream updates with dynamic model selection, not role pins or a model allowlist', async () => {
+  assert.ok(settings.packages.includes('npm:pi-subagents'));
   assert.equal(settings.subagents, undefined);
   assert.equal(settings.enabledModels, undefined);
   for (const path of ['pi/extensions/orchestrate', 'pi/orchestrator.json']) assert.equal(existsSync(new URL(path, checkout)), false);
@@ -28,7 +28,8 @@ test('replacement uses a pinned upstream package with dynamic model selection, n
 test('installed pi-subagents loads via standard package discovery in both Pi distributions, without role/model restrictions', { timeout: 60000 }, async t => {
   assert.ok(existsSync(join(installed, 'index.ts')), 'Run setup-pi.sh to install the declared Pi package first');
   const metadata = JSON.parse(await readFile(join(installed, 'package.json'), 'utf8'));
-  assert.equal(`npm:${metadata.name}@${metadata.version}`, settings.packages[0]);
+  assert.equal(`npm:${metadata.name}`, settings.packages[0]);
+  assert.match(metadata.version, /^\d+\.\d+\.\d+$/);
   const root = await mkdtemp(join(tmpdir(), 'pi subagents integration '));
   t.after(() => rm(root, { recursive: true, force: true }));
   const agent = join(root, 'agent'), cwd = join(root, 'project'), output = join(root, 'loaded.json');

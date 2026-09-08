@@ -1,11 +1,12 @@
-import { readFileSync } from "node:fs";
 import { join, delimiter } from "node:path";
 import { homedir } from "node:os";
 
-// The wrapper supplies RTK's pinned binary; Pi owns normal resource discovery.
+import { effectiveRtk } from "./extensions/efficiency/runtime.mjs";
+
+// Pi owns resource discovery; RTK follows machine-local updates, then bootstrap pins.
 export function nativeEnvironment(checkout, env = process.env) {
   try {
-    const { version } = JSON.parse(readFileSync(join(checkout, "pi/rtk.json"), "utf8"));
+    const { version } = effectiveRtk(checkout, env.PI_CODING_AGENT_DIR || join(homedir(), ".pi/agent"));
     if (!/^\d+\.\d+\.\d+$/.test(version)) return env;
     const bin = join(env.PI_CODING_AGENT_DIR || join(homedir(), ".pi/agent"), "tooling/rtk", version);
     return { ...env, PATH: `${bin}${delimiter}${env.PATH || ""}`, RTK_TELEMETRY_DISABLED: "1", RTK_NO_TOML: "1" };

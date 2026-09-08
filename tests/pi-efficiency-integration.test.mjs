@@ -63,7 +63,7 @@ test('native Bash executes once; reduction preserves raw output, side effects an
 });
 
 test('filter absence/errors keep raw results without rerunning; native full logs remain recoverable', async t => {
-  const f = await fixture(t), config = join(f.root, 'config');
+  const f = await fixture(t), config = join(f.root, 'pi');
   await mkdir(config); await writeFile(join(config, 'settings.json'), '{}'); await writeFile(join(config, 'rtk.json'), '{"version":"0.48.0"}');
   await symlink(join(config, 'settings.json'), join(f.agent, 'settings.json'));
   const diff = 'diff --git a/file b/file\n' + '+long line to filter\n'.repeat(100);

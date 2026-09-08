@@ -25,7 +25,7 @@ class PiSetupTests(unittest.TestCase):
         self.navigation_extension = self.agent_dir / "extensions/code-navigation"
         self.efficiency_extension = self.agent_dir / "extensions/efficiency"
         self.launcher = self.agent_dir / "bin/pi"
-        self.env = dict(os.environ, PI_CODING_AGENT_DIR=str(self.agent_dir))
+        self.env = dict(os.environ, PI_CODING_AGENT_DIR=str(self.agent_dir), HOME=self.temp.name, PI_AUTO_UPDATE="1")
 
     def run_setup(self, *args):
         return subprocess.run(
@@ -42,6 +42,7 @@ class PiSetupTests(unittest.TestCase):
                 'if [ "$1" = "-p" ]; then printf "%s\\n" "$PI_SETUP_SUBAGENT_PIN"; fi\n'
                 'if [ "$2" = "install" ]; then printf "%s\\n" pi "$2" "$3" '
                 '"npm_config_ignore_scripts=${npm_config_ignore_scripts:-}" >> "$PI_SETUP_TEST_LOG"; fi\n'
+                'if [ "${1##*/}" = "update-deps.mjs" ]; then printf "%s\\n" update-deps >> "$PI_SETUP_TEST_LOG"; fi\n'
                 'exit 0\n'
             ),
             "npm": (
@@ -67,6 +68,7 @@ class PiSetupTests(unittest.TestCase):
     def assert_resource_links(self):
         for link, source in (
             (self.settings, REPO / "pi/settings.json"),
+            (self.agent_dir / "models.json", REPO / "pi/models.json"),
             (self.instructions, REPO / "pi/AGENTS.md"),
             (self.web_extension, REPO / "pi/extensions/web"),
             (self.ask_extension, REPO / "pi/extensions/ask-user"),
@@ -76,6 +78,8 @@ class PiSetupTests(unittest.TestCase):
             (self.navigation_extension, REPO / "pi/extensions/code-navigation"),
             (self.efficiency_extension, REPO / "pi/extensions/efficiency"),
             (self.launcher, REPO / "pi/launch.mjs"),
+            (self.agent_dir / "bin/rtk", REPO / "pi/rtk.mjs"),
+            (Path(self.temp.name) / ".local/bin/rtk", REPO / "pi/rtk.mjs"),
         ):
             with self.subTest(link=link):
                 self.assertTrue(link.is_symlink())
@@ -158,6 +162,28 @@ class PiSetupTests(unittest.TestCase):
         self.assertEqual(len(backups), 1)
         self.assertEqual(backups[0].read_text(), previous)
         self.assertEqual(self.settings.resolve(), REPO / "pi/settings.json")
+
+    def test_astra_compaction_budget_is_model_specific(self):
+        models = json.loads((REPO / "pi/models.json").read_text())
+        self.assertEqual(models, {"providers": {"openai-codex": {"modelOverrides": {
+            "gpt-6-astra": {"contextWindow": 416384},
+        }}}})
+        settings = json.loads((REPO / "pi/settings.json").read_text())
+        reserve = settings.get("compaction", {}).get("reserveTokens", 16384)
+        self.assertEqual(416384 - reserve, 400000)
+
+    def test_existing_models_are_backed_up_once(self):
+        models = self.agent_dir / "models.json"
+        previous = '{"providers": {"local-fixture": {"models": [{"id": "local"}]}}}\n'
+        models.write_text(previous)
+        self.run_setup("--skip-install")
+        inode = models.lstat().st_ino
+        self.run_setup("--skip-install")
+        backups = list(self.agent_dir.glob("models-backup.*/models.json"))
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(backups[0].read_text(), previous)
+        self.assertEqual(models.resolve(), REPO / "pi/models.json")
+        self.assertEqual(models.lstat().st_ino, inode)
 
     def test_existing_symlink_target_is_untouched(self):
         other = Path(self.temp.name) / "other.json"
@@ -252,12 +278,11 @@ class PiSetupTests(unittest.TestCase):
         self.assertEqual((backup / "index.ts").read_text(), "// Original local extension\n")
         self.assert_resource_links()
 
-    def test_full_install_uses_package_pins_and_preserves_browser_cache(self):
+    def test_full_install_uses_latest_and_preserves_browser_cache(self):
         self.stub_install_commands()
         self.run_setup()
 
-        pi_version = (REPO / "pi/version").read_text().strip()
-        playwright_version = (REPO / "pi/playwright-version").read_text().strip()
+        pi_version = playwright_version = "latest"
         self.assertEqual(self.install_log.read_text().splitlines(), [
             "npm", "install", "-g", "--ignore-scripts",
             f"@earendil-works/pi-coding-agent@{pi_version}",
@@ -268,8 +293,30 @@ class PiSetupTests(unittest.TestCase):
             str(REPO / "pi/extensions/codex-account-pool"),
             "pi", "install", self.env["PI_SETUP_SUBAGENT_PIN"],
             "npm_config_ignore_scripts=true",
+            "update-deps",
         ])
         self.assert_resource_links()
+
+    def test_update_bypass_uses_bootstrap_versions_without_updater(self):
+        self.stub_install_commands()
+        self.env["PI_AUTO_UPDATE"] = "0"
+        self.run_setup()
+        log = self.install_log.read_text().splitlines()
+        self.assertIn("@earendil-works/pi-coding-agent@" + (REPO / "pi/version").read_text().strip(), log)
+        self.assertIn("@playwright/cli@" + (REPO / "pi/playwright-version").read_text().strip(), log)
+        self.assertNotIn("update-deps", log)
+
+    def test_rtk_launcher_conflict_is_backed_up_and_reruns_are_idempotent(self):
+        target = Path(self.temp.name) / ".local/bin/rtk"
+        target.parent.mkdir(parents=True)
+        target.write_text("user launcher\n")
+        self.run_setup("--skip-install")
+        backups = list(self.agent_dir.glob("launcher-backup.*/rtk"))
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(backups[0].read_text(), "user launcher\n")
+        inode = target.lstat().st_ino
+        self.run_setup("--skip-install")
+        self.assertEqual(target.lstat().st_ino, inode)
 
     def test_failed_package_install_leaves_settings_untouched(self):
         self.stub_install_commands(npm_exit=42)

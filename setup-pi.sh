@@ -50,6 +50,10 @@ if ! "$skip_install"; then
   fi
   pi_version="$(cat "$REPO/pi/version")"
   playwright_version="$(cat "$REPO/pi/playwright-version")"
+  if [[ "${PI_AUTO_UPDATE:-1}" != 0 ]]; then
+    pi_version=latest
+    playwright_version=latest
+  fi
   npm install -g --ignore-scripts \
     "@earendil-works/pi-coding-agent@$pi_version" \
     "@playwright/cli@$playwright_version"
@@ -85,6 +89,7 @@ link_resource() {
 }
 
 link_resource "$REPO/pi/settings.json" "$pi_agent_dir/settings.json" settings
+link_resource "$REPO/pi/models.json" "$pi_agent_dir/models.json" models
 link_resource "$REPO/pi/AGENTS.md" "$pi_agent_dir/AGENTS.md" instructions
 # Keep sibling names identical to the checkout: Pi's TypeScript loader resolves
 # ../memory imports relative to the symlink path, not its canonical target.
@@ -107,14 +112,20 @@ for skill in schlep pi-maintenance; do
   link_resource "$REPO/pi/skills/$skill" "$pi_agent_dir/skills/$skill" skill
 done
 link_resource "$REPO/pi/launch.mjs" "$pi_agent_dir/bin/pi" launcher
+link_resource "$REPO/pi/rtk.mjs" "$pi_agent_dir/bin/rtk" launcher
+link_resource "$REPO/pi/rtk.mjs" "$HOME/.local/bin/rtk" launcher
 if ! "$skip_install"; then
-  package="$(node -p 'require(process.argv[1]).packages.find(p => typeof p === "string" && p.startsWith("npm:pi-subagents@"))' "$REPO/pi/settings.json")"
-  npm_config_ignore_scripts=true "$pi_agent_dir/bin/pi" install "$package"
+  package="$(node -p 'require(process.argv[1]).packages.find(p => typeof p === "string" && p.startsWith("npm:pi-subagents"))' "$REPO/pi/settings.json")"
+  PI_AUTO_UPDATE=0 npm_config_ignore_scripts=true "$pi_agent_dir/bin/pi" install "$package"
+  if [[ "${PI_AUTO_UPDATE:-1}" != 0 ]]; then
+    node "$REPO/pi/update-deps.mjs" || printf 'Dependency update incomplete; the next Pi launch retries.\n' >&2
+  fi
 fi
 
 printf 'Pi settings linked to %s/pi/settings.json\n' "$REPO"
 printf 'Pi web tools linked to %s/pi/extensions/web\n' "$REPO"
 printf 'Pi question, monitor, memory, and Codex account-pool extensions linked to %s/pi/extensions/\n' "$REPO"
 printf 'Pi-native launcher linked to %s/bin/pi\n' "$pi_agent_dir"
-printf 'The launcher adds pinned RTK to PATH; resources use standard Pi discovery. Restart Pi after setup.\n'
+printf 'Pi checks latest stable dependencies on every launch; PI_AUTO_UPDATE=0 bypasses updates.\n'
+printf 'RTK linked to %s/.local/bin/rtk; both commands use the same installed release. Restart Pi after setup.\n' "$HOME"
 printf 'Run pi in a project. On a new Mac, use /login openai-codex to sign in.\n'

@@ -49,6 +49,15 @@ export async function installPackages(stateDir: string, packages: string[], sign
 export async function recipeCommand(stateDir: string, recipe: any, signal?: AbortSignal) {
   if (recipe.command) return [await executable(recipe.command[0]), ...recipe.command.slice(1)];
   const dir = await installPackages(stateDir, recipe.packages, signal);
+  // TypeScript 7 ships native LSP and no longer provides tsserver.js for the
+  // legacy adapter. Keep older bootstrap recipes working without pinning back.
+  const typescript = recipe.packages.find((spec: string) => spec.startsWith("typescript@"));
+  if (recipe.package === "typescript-language-server" && Number(typescript?.split("@").at(-1)?.split(".")[0]) >= 7) {
+    const tsDir = join(dir, "node_modules", "typescript");
+    const manifest = JSON.parse(await readFile(join(tsDir, "package.json"), "utf8"));
+    if (typeof manifest.bin?.tsc !== "string") throw new Error("TypeScript no longer exposes the expected native LSP launcher.");
+    return [process.execPath, join(tsDir, manifest.bin.tsc), "--lsp", "--stdio"];
+  }
   const pkgDir = join(dir, "node_modules", recipe.package);
   const manifest = JSON.parse(await readFile(join(pkgDir, "package.json"), "utf8"));
   const entry = typeof manifest.bin === "string" ? manifest.bin : manifest.bin?.[recipe.bin];

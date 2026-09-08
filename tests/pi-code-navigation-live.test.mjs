@@ -4,14 +4,16 @@ import { mkdtemp, mkdir, readFile, writeFile, rm, realpath } from 'node:fs/promi
 import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { effectiveNavigation } from '../pi/extensions/efficiency/runtime.mjs';
+import { fileURLToPath } from 'node:url';
 import { Navigation } from '../pi/extensions/code-navigation/navigation.ts';
 import { recipeCommand, astCommand } from '../pi/extensions/code-navigation/packages.ts';
 import { structuralSearch } from '../pi/extensions/code-navigation/ast.ts';
 
-// Opt-in downloads only the checked-in package pins into machine-local tooling.
+// Opt-in uses locally selected versions, or bootstrap pins, in machine-local tooling.
 // No model/API calls; source fixtures are disposable and never leave this Mac.
 test('actual pinned TypeScript/Python LSP navigation and ast-grep search', { skip: process.env.PI_CODE_NAV_LIVE !== '1', timeout: 180000 }, async t => {
-  const pins = JSON.parse(await readFile(new URL('../pi/code-navigation.json', import.meta.url), 'utf8'));
+  const pins = effectiveNavigation(fileURLToPath(new URL('../', import.meta.url)));
   const tooling = process.env.PI_CODE_NAV_TOOLING_DIR || join(process.env.PI_CODING_AGENT_DIR || join(homedir(), '.pi/agent'), 'code-navigation');
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pi navigation live ')));
   const nav = new Navigation();

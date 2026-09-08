@@ -1,7 +1,8 @@
 import { getAgentDir, type ExtensionAPI, type ExtensionContext, type ToolResultEvent } from "@earendil-works/pi-coding-agent";
-import { readFile, rm } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { realpathSync } from "node:fs";
+import { effectiveRtk } from "./runtime.mjs";
 import { filterFor, quietTests, runFilter, saveRaw, originalOutput, sessionKey } from "./output.ts";
 import { privateDirectory, recordUsage, recordOutput, usageReport, formatReport } from "./usage.ts";
 
@@ -25,7 +26,7 @@ export default function (pi: ExtensionAPI) {
         if (!chosen) return;
         if (!binary) {
           const source = dirname(realpathSync(join(agent, "settings.json")));
-          const pins = JSON.parse(await readFile(join(source, "rtk.json"), "utf8"));
+          const pins = effectiveRtk(dirname(source), agent);
           if (!/^\d+\.\d+\.\d+$/.test(pins.version)) return;
           binary = join(agent, "tooling", "rtk", pins.version, "rtk");
         }
