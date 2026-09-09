@@ -94,7 +94,7 @@ link_resource "$REPO/pi/models.json" "$pi_agent_dir/models.json" models
 link_resource "$REPO/pi/AGENTS.md" "$pi_agent_dir/AGENTS.md" instructions
 # Keep sibling names identical to the checkout: Pi's TypeScript loader resolves
 # ../memory imports relative to the symlink path, not its canonical target.
-for extension in web ask-user monitor memory project-context code-navigation efficiency codex-account-pool appearance; do
+for extension in web ask-user monitor memory project-context code-navigation efficiency codex-account-pool appearance model-briefing; do
   source="$REPO/pi/extensions/$extension"
   link_resource "$source" "$pi_agent_dir/extensions/$extension" extension
   # Retire only our old prefixed link; preserve user-owned replacements.

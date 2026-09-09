@@ -25,6 +25,7 @@ class PiSetupTests(unittest.TestCase):
         self.project_extension = self.agent_dir / "extensions/project-context"
         self.navigation_extension = self.agent_dir / "extensions/code-navigation"
         self.efficiency_extension = self.agent_dir / "extensions/efficiency"
+        self.briefing_extension = self.agent_dir / "extensions/model-briefing"
         self.launcher = self.agent_dir / "bin/pi"
         self.env = dict(os.environ, PI_CODING_AGENT_DIR=str(self.agent_dir), HOME=self.temp.name, PI_AUTO_UPDATE="1")
 
@@ -80,6 +81,7 @@ class PiSetupTests(unittest.TestCase):
             (self.project_extension, REPO / "pi/extensions/project-context"),
             (self.navigation_extension, REPO / "pi/extensions/code-navigation"),
             (self.efficiency_extension, REPO / "pi/extensions/efficiency"),
+            (self.briefing_extension, REPO / "pi/extensions/model-briefing"),
             (self.agent_dir / "extensions/appearance", REPO / "pi/extensions/appearance"),
             (self.agent_dir / "themes/quiet-graphite.json", REPO / "pi/themes/quiet-graphite.json"),
             (self.agent_dir / "themes/paper.json", REPO / "pi/themes/paper.json"),
@@ -117,7 +119,7 @@ class PiSetupTests(unittest.TestCase):
             self.settings, self.instructions, self.web_extension,
             self.ask_extension, self.monitor_extension, self.memory_extension,
             self.project_extension,
-            self.navigation_extension, self.efficiency_extension, self.launcher,
+            self.navigation_extension, self.efficiency_extension, self.briefing_extension, self.launcher,
         )
         link_inodes = [link.lstat().st_ino for link in links]
         self.run_setup("--skip-install")
