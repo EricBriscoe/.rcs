@@ -19,7 +19,7 @@ export function nextFooterUpdateMs(state, now = Date.now()) {
  * update and shutdown advances the generation, so an older read cannot touch UI
  * or schedule a timer after its context lifetime ends.
  */
-export function createFooterController({ readState, renderStatus, statusLine, setTimer = setTimeout, clearTimer = clearTimeout, onError = () => {} }) {
+export function createFooterController({ readState, renderStatus, statusLine, disabledStatus, setTimer = setTimeout, clearTimer = clearTimeout, onError = () => {} }) {
   let footerContext;
   let footerTimer;
   let generation = 0;
@@ -39,7 +39,7 @@ export function createFooterController({ readState, renderStatus, statusLine, se
     const state = await readState();
     if (generation !== updateGeneration || footerContext !== ctx) return;
     if (!state.enabled) {
-      renderStatus(ctx, undefined);
+      renderStatus(ctx, disabledStatus);
       return;
     }
     renderStatus(ctx, statusLine(state));

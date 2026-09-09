@@ -5,6 +5,7 @@ import { getModels, openAICodexResponsesApi } from "@earendil-works/pi-ai/compat
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
 import type { AssistantMessage, Context, Model, Provider, SimpleStreamOptions } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { SettingsManager } from "@earendil-works/pi-coding-agent";
 import {
   allExhaustedMessage, eligibleAccounts, isModelAccessError, isPoolAccountUnavailable, isQuotaExhaustion, loginAndAdd,
   loginAndReplace, markExhausted, noteForegroundAccount, quotaResetAt, readPoolState, shouldFailover, resolveAccount,
@@ -13,6 +14,7 @@ import {
 import { compactQuota, formatQuota, normalizeQuotaPayload, mergeQuotaHeaders } from "./quota.mjs";
 import { createBackgroundQuota } from "./background.mjs";
 import { createFooterController } from "./footer.mjs";
+import { openPoolMenu, POOL_HELP } from "./menu.mjs";
 
 const PROVIDER_ID = "openai-codex";
 const stockModels = getModels(PROVIDER_ID);
@@ -244,9 +246,12 @@ function poolProvider(): Provider<any> {
     id: PROVIDER_ID,
     name: "OpenAI Codex (account pool)",
     baseUrl: "https://chatgpt.com/backend-api",
-    auth: { apiKey: {
+    auth: { oauth: officialOAuth, apiKey: {
       name: "ChatGPT Codex account pool",
-      async check() { return (await readPoolState()).enabled ? { source: "Codex account pool" } : undefined; },
+      // Registered only while enabled. Keep readiness synchronous: Pi startup
+      // model selection can race filesystem-backed availability checks. Resolve
+      // and the stream still re-read state before using any account.
+      check() { return { type: "api_key", source: "Codex account pool" }; },
       async resolve() { return (await readPoolState()).enabled ? { auth: { apiKey: "codex-account-pool" }, source: "Codex account pool" } : undefined; },
     } },
     getModels: () => stockModels,
@@ -290,7 +295,7 @@ function statusText(state: Awaited<ReturnType<typeof readPoolState>>) {
     const stored = state.accounts.find(candidate => candidate.accountId === account.accountId);
     lines.push(`${account.enabled ? "on" : "off"} ${account.label} — ${account.ready ? "ready" : "exhausted"}${reset}; ${formatQuota(stored?.quota)}`);
   }
-  if (summary.accounts.length === 0) lines.push("No accounts. Use /codex-pool add NAME.");
+  if (summary.accounts.length === 0) lines.push("No accounts. Open /codex-pool to sign in.");
   return lines.join("\n");
 }
 
@@ -351,103 +356,127 @@ export default async function (pi: ExtensionAPI) {
   const footer = createFooterController({
     readState: readPoolState,
     statusLine: poolStatusLine,
-    renderStatus(ctx: any, value: string | undefined) { ctx.ui.setStatus("codex-pool", value); },
+    disabledStatus: "Codex pool disabled",
+    renderStatus(ctx: any, value: string | undefined) { ctx.ui.setStatus("codex-pool", value ? `${value} · /codex-pool` : value); },
   });
   const updateFooter = footer.update;
   refreshFooter = footer.refresh;
   if ((await readPoolState()).enabled) install();
 
-  pi.registerCommand("codex-pool", {
-    description: "Manage opt-in ChatGPT Codex OAuth account priority failover",
-    handler: async (raw, ctx) => {
-      const [action = "status", ...rest] = raw.trim().split(/\s+/).filter(Boolean);
-      const label = rest[0];
-      if (action === "status" || action === "list") {
-        const state = await readPoolState();
-        await updateFooter(ctx);
-        ctx.ui.notify(statusText(state), "info");
-        return;
-      }
-      if (action === "quota") {
-        const before = await readPoolState();
-        const targets = label ? before.accounts.filter(account => account.label === label) : before.accounts;
-        if (targets.length === 0) throw new Error(label ? `No Codex account named ${label}.` : "No Codex accounts in the pool.");
-        const lines: string[] = [];
-        for (const target of targets) {
-          try {
-            const quota = await refreshQuota(target.accountId, ctx.signal);
-            lines.push(`${target.label} — ${formatQuota(quota)}`);
-          } catch {
-            // A quota read never changes credentials, eligibility, or failover state.
-            lines.push(`${target.label} — quota unavailable; ${formatQuota(target.quota)}`);
-          }
+  const handleAction = async (action: string, rest: string[], ctx: any) => {
+    const label = rest[0];
+    if (action === "status" || action === "list") {
+      const state = await readPoolState();
+      await updateFooter(ctx);
+      ctx.ui.notify(statusText(state), "info");
+      return;
+    }
+    if (action === "quota") {
+      const before = await readPoolState();
+      const targets = label ? before.accounts.filter(account => account.label === label) : before.accounts;
+      if (targets.length === 0) throw new Error(label ? `No Codex account named ${label}.` : "No Codex accounts in the pool.");
+      const lines: string[] = [];
+      for (const target of targets) {
+        try {
+          const quota = await refreshQuota(target.accountId, ctx.signal);
+          lines.push(`${target.label} — ${formatQuota(quota)}`);
+        } catch {
+          // A quota read never changes credentials, eligibility, or failover state.
+          lines.push(`${target.label} — quota unavailable; ${formatQuota(target.quota)}`);
         }
-        await updateFooter(ctx);
-        ctx.ui.notify(lines.join("\n"), "info");
-        return;
       }
-      if (action === "add" || action === "login") {
-        if (!label) throw new Error("Usage: /codex-pool add NAME [browser|device]");
-        await loginAccount(label, rest[1], ctx);
-        await updateFooter(ctx);
-        ctx.ui.notify(`Added Codex account ${label}. Use /codex-pool enable to activate the pool.`, "info");
-        return;
-      }
-      if (action === "relogin") {
-        if (!label) throw new Error("Usage: /codex-pool relogin NAME [browser|device]");
-        await loginAccount(label, rest[1], ctx, true);
-        await updateFooter(ctx);
-        ctx.ui.notify(`Refreshed credentials for Codex account ${label}.`, "info");
-        return;
-      }
-      if (action === "import") throw new Error("Importing Pi's existing login is intentionally unavailable: this extension never reads existing credentials. Use /codex-pool add NAME instead.");
-      if (action === "enable" || action === "disable") {
-        if (!ctx.isIdle()) throw new Error("Change Codex pool enablement only while Pi is idle.");
-        await updatePoolState(state => {
-          if (label) {
-            const account = state.accounts.find(candidate => candidate.label === label);
-            if (!account) throw new Error(`No Codex account named ${label}.`);
-            const previousRoute = state.accounts.find(account => account.enabled)?.accountId;
-            account.enabled = action === "enable";
-            if ((action === "disable" && state.backgroundHoldAccountId === account.accountId) || previousRoute !== state.accounts.find(account => account.enabled)?.accountId) delete state.backgroundHoldAccountId;
-            if (action === "enable") { account.exhausted = false; delete account.resetAt; }
-          } else state.enabled = action === "enable";
-        });
-        if ((await readPoolState()).enabled) install(); else uninstall();
-        await updateFooter(ctx);
-        ctx.ui.notify(statusText(await readPoolState()), "info");
-        return;
-      }
-      if (action === "priority") {
-        const position = Number(rest[1]);
-        if (!label || !Number.isInteger(position) || position < 1) throw new Error("Usage: /codex-pool priority NAME POSITION");
-        await updatePoolState(state => {
-          const index = state.accounts.findIndex(candidate => candidate.label === label);
-          if (index < 0) throw new Error(`No Codex account named ${label}.`);
+      await updateFooter(ctx);
+      ctx.ui.notify(lines.join("\n"), "info");
+      return;
+    }
+    if (action === "add" || action === "login") {
+      if (!label) throw new Error("Usage: /codex-pool add NAME [browser|device]");
+      await loginAccount(label, rest[1], ctx);
+      await updateFooter(ctx);
+      ctx.ui.notify(`Added Codex account ${label}. Open /codex-pool to manage accounts and enable the pool.`, "info");
+      return;
+    }
+    if (action === "relogin") {
+      if (!label) throw new Error("Usage: /codex-pool relogin NAME [browser|device]");
+      await loginAccount(label, rest[1], ctx, true);
+      await updateFooter(ctx);
+      ctx.ui.notify(`Refreshed credentials for Codex account ${label}.`, "info");
+      return;
+    }
+    if (action === "import") throw new Error("Importing Pi's existing login is intentionally unavailable: this extension never reads existing credentials. Use /codex-pool add NAME instead.");
+    if (action === "enable" || action === "disable") {
+      if (!ctx.isIdle()) throw new Error("Change Codex pool enablement only while Pi is idle.");
+      await updatePoolState(state => {
+        if (label) {
+          const account = state.accounts.find(candidate => candidate.label === label);
+          if (!account) throw new Error(`No Codex account named ${label}.`);
           const previousRoute = state.accounts.find(account => account.enabled)?.accountId;
-          const [account] = state.accounts.splice(index, 1);
-          state.accounts.splice(Math.min(position - 1, state.accounts.length), 0, account);
-          if (previousRoute !== state.accounts.find(account => account.enabled)?.accountId) delete state.backgroundHoldAccountId;
-        });
-        await updateFooter(ctx);
-        ctx.ui.notify(statusText(await readPoolState()), "info");
-        return;
-      }
-      if (action === "remove") {
-        if (!label) throw new Error("Usage: /codex-pool remove NAME");
-        const ok = ctx.hasUI && await ctx.ui.confirm("Remove Codex account", `Remove ${label} from the account pool? This cannot be undone.`);
-        if (!ok) { ctx.ui.notify("Removal cancelled.", "info"); return; }
-        await updatePoolState(state => {
-          const index = state.accounts.findIndex(candidate => candidate.label === label);
-          if (index < 0) throw new Error(`No Codex account named ${label}.`);
-          if (state.backgroundHoldAccountId === state.accounts[index].accountId) delete state.backgroundHoldAccountId;
-          state.accounts.splice(index, 1);
-        });
-        await updateFooter(ctx);
-        ctx.ui.notify(statusText(await readPoolState()), "info");
-        return;
-      }
-      throw new Error("Commands: status, quota [NAME], add NAME [browser|device], relogin NAME [browser|device], enable [NAME], disable [NAME], priority NAME POSITION, remove NAME, import");
+          account.enabled = action === "enable";
+          if ((action === "disable" && state.backgroundHoldAccountId === account.accountId) || previousRoute !== state.accounts.find(account => account.enabled)?.accountId) delete state.backgroundHoldAccountId;
+          if (action === "enable") { account.exhausted = false; delete account.resetAt; }
+        } else state.enabled = action === "enable";
+      });
+      if ((await readPoolState()).enabled) {
+        install();
+        // First-time setup can start without a model. Finish activation here so
+        // the next prompt works without a separate /model command or restart.
+        if (!ctx.model || (ctx.model.provider === "unknown" && ctx.model.id === "unknown")) {
+          await ctx.modelRegistry.refresh({ allowNetwork: false });
+          const settings = SettingsManager.create(ctx.cwd, undefined, { projectTrusted: ctx.isProjectTrusted() });
+          const available = ctx.modelRegistry.getAvailable().filter((model: Model<any>) => model.provider === PROVIDER_ID);
+          const model = available.find((model: Model<any>) => model.id === settings.getDefaultModel()) ?? available[0];
+          if (model && await pi.setModel(model)) pi.setThinkingLevel(settings.getDefaultThinkingLevel() ?? "off");
+        }
+      } else uninstall();
+      await updateFooter(ctx);
+      ctx.ui.notify(statusText(await readPoolState()), "info");
+      return;
+    }
+    if (action === "priority") {
+      const position = Number(rest[1]);
+      if (!label || !Number.isInteger(position) || position < 1) throw new Error("Usage: /codex-pool priority NAME POSITION");
+      await updatePoolState(state => {
+        const index = state.accounts.findIndex(candidate => candidate.label === label);
+        if (index < 0) throw new Error(`No Codex account named ${label}.`);
+        const previousRoute = state.accounts.find(account => account.enabled)?.accountId;
+        const [account] = state.accounts.splice(index, 1);
+        state.accounts.splice(Math.min(position - 1, state.accounts.length), 0, account);
+        if (previousRoute !== state.accounts.find(account => account.enabled)?.accountId) delete state.backgroundHoldAccountId;
+      });
+      await updateFooter(ctx);
+      ctx.ui.notify(statusText(await readPoolState()), "info");
+      return;
+    }
+    if (action === "remove") {
+      if (!label) throw new Error("Usage: /codex-pool remove NAME");
+      const ok = ctx.hasUI && await ctx.ui.confirm("Remove Codex account", `Remove ${label} from the account pool? This cannot be undone.`);
+      if (!ok) { ctx.ui.notify("Removal cancelled.", "info"); return; }
+      await updatePoolState(state => {
+        const index = state.accounts.findIndex(candidate => candidate.label === label);
+        if (index < 0) throw new Error(`No Codex account named ${label}.`);
+        if (state.backgroundHoldAccountId === state.accounts[index].accountId) delete state.backgroundHoldAccountId;
+        state.accounts.splice(index, 1);
+      });
+      await updateFooter(ctx);
+      ctx.ui.notify(statusText(await readPoolState()), "info");
+      return;
+    }
+    if (action === "help") { ctx.ui.notify(POOL_HELP, "info"); return; }
+    throw new Error("Open /codex-pool for the interactive menu, or /codex-pool help for guidance.");
+  };
+
+  pi.registerCommand("codex-pool", {
+    description: "Open Codex account settings: sign in, quota, priority, and remove logins",
+    getArgumentCompletions: prefix => {
+      const items = ["menu", "status", "quota", "add", "relogin", "enable", "disable", "priority", "remove", "help"]
+        .filter(value => value.startsWith(prefix)).map(value => ({ value, label: value }));
+      return items.length ? items : null;
+    },
+    handler: async (raw, ctx) => {
+      const [action = "menu", ...rest] = raw.trim().split(/\s+/).filter(Boolean);
+      if (action === "menu") {
+        await openPoolMenu(ctx, { readState: readPoolState, execute: (action: string, args: string[]) => handleAction(action, args, ctx) });
+      } else await handleAction(action, rest, ctx);
     },
   });
 
