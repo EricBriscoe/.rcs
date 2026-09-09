@@ -2,7 +2,7 @@
 
 Opt-in priority failover for ChatGPT Plus/Pro **Codex OAuth** accounts. It preserves normal `openai-codex/<model>` IDs and never uses an OpenAI API key or paid API fallback.
 
-Open `/codex-pool` for interactive settings: add an account, choose browser or device login, enable the pool, and select an account to re-login, change priority, refresh quota, or remove it (with confirmation). Escape goes back; Done closes settings. The footer points to this menu. `/codex-pool status` remains read-only; explicit subcommands and Tab completion also work.
+Open `/codex-pool` for account setup, re-login, priority, quota, and removal (confirmed). Partial commands such as `/codex-pool relogin` open pickers. Login failures offer an explanation and browser/device retry; Escape cancels. `/codex-pool status` is read-only. The footer points to settings; Tab completes commands.
 
 Pool credentials are separate from Pi’s `/login` and `/logout` store. Use `/codex-pool relogin NAME browser` to sign in again and `/codex-pool remove NAME` to remove a pool login. For ordinary single-account `/login openai-codex` and `/logout`, first run `/codex-pool disable`. A standard subscription login can coexist; enabled pooling still uses pool accounts and quota.
 

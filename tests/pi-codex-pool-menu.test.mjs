@@ -88,6 +88,14 @@ test('failed login stays in settings and never offers to enable the pool', async
   assert.equal(f.notices[0].message, 'Login cancelled');
 });
 
+test('leaving login recovery does not enable the pool or report an added account', async () => {
+  const f = fixture(['Add account', 'personal', 'Open browser', 'Done']);
+  f.service.execute = async () => false;
+  await f.run();
+  assert.equal(f.state.enabled, false);
+  assert.equal(f.state.accounts.length, 0);
+});
+
 test('busy and aborted sessions cannot submit settings changes', async () => {
   const busy = fixture(['Add account', 'Done']);
   busy.ctx.isIdle = () => false;

@@ -53,7 +53,7 @@ export async function openPoolMenu(ctx, { readState, execute: perform }) {
         }
         const method = await loginMethod(ctx);
         if (!method) continue;
-        await execute('add', [label, method]);
+        if (await execute('add', [label, method]) === false) continue;
         if (!(await readState()).enabled) {
           const enable = await pick(ctx, 'Account added. Use the pool now?', [
             { label: 'Enable pool', value: true },

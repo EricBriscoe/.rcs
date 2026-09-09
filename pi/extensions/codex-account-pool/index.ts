@@ -15,6 +15,7 @@ import { compactQuota, formatQuota, normalizeQuotaPayload, mergeQuotaHeaders } f
 import { createBackgroundQuota } from "./background.mjs";
 import { createFooterController } from "./footer.mjs";
 import { openPoolMenu, POOL_HELP } from "./menu.mjs";
+import { completePoolArguments, loginWithRecovery } from "./auth-ui.mjs";
 
 const PROVIDER_ID = "openai-codex";
 const stockModels = getModels(PROVIDER_ID);
@@ -33,7 +34,7 @@ function accountKey(accountId: string) {
 
 function safeAuthenticationError() {
   // Installed OAuth errors can include whole token responses. Never surface them.
-  return "Codex account authentication failed. Re-login this account with /codex-pool relogin NAME.";
+  return "The saved Codex login could not be refreshed. Open /codex-pool, choose this account, then Sign in again. Browser and device-code login are available.";
 }
 
 function errorStream(model: Model<any>, message: string) {
@@ -294,44 +295,40 @@ function statusText(state: Awaited<ReturnType<typeof readPoolState>>) {
   for (const account of summary.accounts) {
     const reset = account.resetAt ? ` reset ${new Date(account.resetAt).toISOString()}` : account.exhausted ? " reset unknown" : "";
     const stored = state.accounts.find(candidate => candidate.accountId === account.accountId);
-    lines.push(`${account.enabled ? "on" : "off"} ${account.label} — ${account.ready ? "ready" : "exhausted"}${reset}; ${formatQuota(stored?.quota)}`);
+    lines.push(`${account.enabled ? "on" : "off"} ${account.label} — ${account.ready ? "login saved" : "quota cooldown"}${reset}; ${formatQuota(stored?.quota)}`);
   }
   if (summary.accounts.length === 0) lines.push("No accounts. Open /codex-pool to sign in.");
   return lines.join("\n");
 }
 
 async function loginAccount(label: string, method: string | undefined, ctx: any, replace = false) {
-  if (!ctx.hasUI) throw new Error("Codex account login requires interactive Pi UI.");
-  if (!officialOAuth) throw new Error("Official Codex OAuth is unavailable in this Pi installation.");
-  const chosen = method || await ctx.ui.select("Codex account login", ["browser", "device"]);
-  if (chosen !== "browser" && chosen !== "device") throw new Error("Login cancelled");
-  const controller = new AbortController();
-  try {
+  if (!officialOAuth) throw new Error("OpenAI sign-in is unavailable in this Pi installation. Restart Pi and open /codex-pool.");
+  return loginWithRecovery(ctx, { label, method, attempt: async (chosen: string) => {
+    const controller = new AbortController();
+    const signal = ctx.signal ? AbortSignal.any([ctx.signal, controller.signal]) : controller.signal;
     await (replace ? loginAndReplace : loginAndAdd)(label, () => officialOAuth.login({
-      signal: controller.signal,
+      signal,
       async prompt(prompt: any) {
         if (prompt.type === "select") return chosen === "device" ? "device_code" : "browser";
-        const input = await ctx.ui.input("OpenAI Codex login", prompt.message, { signal: prompt.signal });
-        if (input) return input;
-        // Browser completion aborts only its manual-input dialog. Do not turn that into
-        // a whole-flow cancellation; the official OAuth flow still owns its callback.
+        const input = await ctx.ui.input(prompt.message, prompt.placeholder ?? "Paste the complete redirect URL here if the browser does not finish automatically", { signal: prompt.signal ?? signal });
+        if (input?.trim()) return input.trim();
+        // Browser success closes only its fallback input; the OAuth callback owns completion.
         if (prompt.signal?.aborted) throw new Error("Login prompt closed");
         controller.abort();
         throw new Error("Login cancelled");
       },
       notify(event: any) {
         if (event.type === "auth_url") {
-          spawn("open", [event.url], { detached: true, stdio: "ignore" }).unref();
-          ctx.ui.notify("Opened OpenAI Codex login in your browser.", "info");
+          const browser = spawn("open", [event.url], { detached: true, stdio: "ignore" });
+          browser.once("error", () => ctx.ui.notify("Could not open your browser. Cancel this attempt and choose device-code login.", "warning"));
+          browser.unref();
+          ctx.ui.notify(`Finish signing into ${label} in the browser. Keep Pi open; it will continue automatically. If needed, paste the complete redirect URL into the login field.`, "info");
         } else if (event.type === "device_code") {
-          ctx.ui.notify(`Open ${event.verificationUri} and enter code ${event.userCode}.`, "info");
+          ctx.ui.notify(`Open ${event.verificationUri} and enter code ${event.userCode}. Keep Pi open until sign-in completes.`, "info");
         } else if (event.type === "progress") ctx.ui.notify(event.message, "info");
       },
     }));
-  } catch (error) {
-    if (error instanceof Error && error.message === "Login cancelled") throw error;
-    throw new Error(safeAuthenticationError());
-  }
+  } });
 }
 
 export default async function (pi: ExtensionAPI) {
@@ -365,6 +362,9 @@ export default async function (pi: ExtensionAPI) {
   if ((await readPoolState()).enabled) install();
 
   const handleAction = async (action: string, rest: string[], ctx: any) => {
+    const completed = await completePoolArguments(action, rest, ctx, readPoolState);
+    if (!completed) return false;
+    rest = completed;
     const label = rest[0];
     if (action === "status" || action === "list") {
       const state = await readPoolState();
@@ -392,14 +392,14 @@ export default async function (pi: ExtensionAPI) {
     }
     if (action === "add" || action === "login") {
       if (!label) throw new Error("Usage: /codex-pool add NAME [browser|device]");
-      await loginAccount(label, rest[1], ctx);
+      if (!await loginAccount(label, rest[1], ctx)) return false;
       await updateFooter(ctx);
       ctx.ui.notify(`Added Codex account ${label}. Open /codex-pool to manage accounts and enable the pool.`, "info");
       return;
     }
     if (action === "relogin") {
       if (!label) throw new Error("Usage: /codex-pool relogin NAME [browser|device]");
-      await loginAccount(label, rest[1], ctx, true);
+      if (!await loginAccount(label, rest[1], ctx, true)) return false;
       await updateFooter(ctx);
       ctx.ui.notify(`Refreshed credentials for Codex account ${label}.`, "info");
       return;
@@ -430,7 +430,9 @@ export default async function (pi: ExtensionAPI) {
         }
       } else uninstall();
       await updateFooter(ctx);
-      ctx.ui.notify(statusText(await readPoolState()), "info");
+      ctx.ui.notify(label ? `${label} ${action === "enable" ? "enabled" : "disabled"}. Open /codex-pool to manage accounts.` : action === "enable"
+        ? `Codex pool enabled${ctx.model?.provider === PROVIDER_ID ? ` · ${ctx.model.id}` : ""}. Open /codex-pool for accounts and quota.`
+        : "Codex pool disabled. Ordinary Pi sign-in is now in use; saved pool accounts are kept.", "info");
       return;
     }
     if (action === "priority") {
@@ -475,9 +477,14 @@ export default async function (pi: ExtensionAPI) {
     },
     handler: async (raw, ctx) => {
       const [action = "menu", ...rest] = raw.trim().split(/\s+/).filter(Boolean);
-      if (action === "menu") {
-        await openPoolMenu(ctx, { readState: readPoolState, execute: (action: string, args: string[]) => handleAction(action, args, ctx) });
-      } else await handleAction(action, rest, ctx);
+      try {
+        if (action === "menu") {
+          await openPoolMenu(ctx, { readState: readPoolState, execute: (action: string, args: string[]) => handleAction(action, args, ctx) });
+        } else await handleAction(action, rest, ctx);
+      } catch (error) {
+        if (ctx.signal?.aborted) return;
+        ctx.ui.notify(error instanceof Error ? error.message : "Could not update accounts. Open /codex-pool to try again.", "warning");
+      }
     },
   });
 
@@ -488,6 +495,10 @@ export default async function (pi: ExtensionAPI) {
       if (typeof data.responseId === "string" && typeof data.accountKey === "string" && data.accountKey.length === 64) responseAccountKeys.set(data.responseId, data.accountKey);
     }
     await updateFooter(ctx);
+    const state = await readPoolState();
+    if ((!ctx.model || ctx.model.provider === "unknown") && !state.enabled && state.accounts.length) {
+      ctx.ui.notify("Your Codex login is saved, but the pool is disabled. Open /codex-pool and choose Enable pool to use it; signing in again is not required just to enable it.", "info");
+    }
   });
 
   pi.on("session_shutdown", (_event, ctx) => {
