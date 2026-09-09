@@ -10,7 +10,7 @@ import test from "node:test";
 const exec = promisify(execFile);
 const checkout = dirname(dirname(fileURLToPath(import.meta.url)));
 const packageDir = join(execFileSync("npm", ["root", "-g"], { encoding: "utf8" }).trim(), "@earendil-works/pi-coding-agent");
-const names = ["appearance", "ask-user", "code-navigation", "efficiency", "memory", "monitor", "project-context", "web"];
+const names = ["appearance", "ask-user", "code-navigation", "efficiency", "memory", "model-briefing", "monitor", "project-context", "web"];
 
 test("migrated installer links load sibling imports in both Pi CLI distributions", { timeout: 60000 }, async t => {
   const root = await mkdtemp(join(tmpdir(), "pi installed extensions "));
