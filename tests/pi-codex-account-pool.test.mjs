@@ -264,11 +264,11 @@ for (const enabled of [false, true]) {
     const agent = join(root, "agent"), cwd = join(root, "project"), output = join(root, "probe.json"), probe = join(root, "probe.ts");
     await mkdir(cwd, { recursive: true });
     await mkdir(agent, { recursive: true });
-    await writeFile(join(agent, "settings.json"), "{}");
+    await writeFile(join(agent, "settings.json"), JSON.stringify({ defaultProvider: "openai-codex", defaultModel: "gpt-6-astra", defaultThinkingLevel: "high" }));
     if (enabled) {
       await updatePoolState(state => { state.enabled = true; state.accounts.push(account("fixture", "fixture", 4_102_444_800_000)); }, path);
     }
-    await writeFile(probe, `import {writeFileSync} from 'node:fs'; export default function(pi) { pi.registerCommand('pool-probe',{handler:async(_args,ctx)=>{const provider=ctx.modelRegistry.getProvider('openai-codex'); writeFileSync(${JSON.stringify(output)},JSON.stringify({name:provider?.name,models:provider?.getModels().length}));}}); }`);
+    await writeFile(probe, `import {writeFileSync} from 'node:fs'; export default function(pi) { pi.registerCommand('pool-probe',{handler:async(_args,ctx)=>{const provider=ctx.modelRegistry.getProvider('openai-codex'); writeFileSync(${JSON.stringify(output)},JSON.stringify({name:provider?.name,models:provider?.getModels().length,selected:ctx.model?.id,thinking:pi.getThinkingLevel(),oauth:!!provider?.auth.oauth,check:provider?.auth.apiKey?.check?.({})}));}}); }`);
     const run = exec(process.execPath, [cli, "--offline", "--no-session", "--no-context-files", "--approve", "-e", join(checkout, "pi/extensions/codex-account-pool"), "-e", probe, "-p", "/pool-probe"], { cwd, env: { ...process.env, HOME: root, PI_CODING_AGENT_DIR: agent }, timeout: 25000 });
     run.child.stdin.end();
     const { stdout, stderr } = await run;
@@ -276,8 +276,43 @@ for (const enabled of [false, true]) {
     const result = JSON.parse(await readFile(output, "utf8"));
     assert.ok(result.models > 0);
     assert.equal(result.name, enabled ? "OpenAI Codex (account pool)" : "OpenAI Codex");
+    assert.equal(result.oauth, true, "stock OpenAI OAuth remains available in /login");
+    if (enabled) {
+      assert.equal(result.selected, "gpt-6-astra", "startup selects the configured model without a stock login");
+      assert.equal(result.thinking, "high");
+      assert.deepEqual(result.check, { type: "api_key", source: "Codex account pool" }, "readiness is synchronous and typed");
+    }
   });
 }
+
+test("installed menu activates a model in the current session and confirms login removal", { timeout: 30000 }, async t => {
+  const { root, path } = await fixture(t);
+  const agent = join(root, "agent"), cwd = join(root, "project"), output = join(root, "menu.json"), probe = join(root, "menu.ts");
+  await mkdir(cwd, { recursive: true });
+  await mkdir(agent, { recursive: true });
+  await writeFile(join(agent, "settings.json"), JSON.stringify({ defaultProvider: "openai-codex", defaultModel: "gpt-6-astra", defaultThinkingLevel: "high" }));
+  await updatePoolState(state => { state.accounts.push(account("fixture", "fixture", 4_102_444_800_000)); }, path);
+  await writeFile(probe, `import pool from ${JSON.stringify(join(checkout, "pi/extensions/codex-account-pool/index.ts"))};
+    import {writeFileSync} from 'node:fs';
+    export default async function(pi) {
+      let manage; await pool({...pi,registerCommand:(name,config)=>{if(name==='codex-pool')manage=config.handler;}});
+      pi.registerCommand('menu-integration',{handler:async(_args,ctx)=>{
+        const steps=['Enable pool','1. fixture','Remove saved login','Done']; let confirmed=0;
+        await manage('',{...ctx,get model(){return ctx.model;},hasUI:true,ui:{...ctx.ui,
+          select:async(_title,choices)=>{const prefix=steps.shift();const choice=choices.find(value=>value.startsWith(prefix));if(!choice)throw new Error('Missing menu choice');return choice;},
+          confirm:async()=>{confirmed++;return false;}, notify:()=>{}
+        }});
+        writeFileSync(${JSON.stringify(output)},JSON.stringify({model:ctx.model?.id,thinking:pi.getThinkingLevel(),confirmed,remaining:steps.length}));
+      }});
+    }`);
+  const run = exec(process.execPath, [cli, "--offline", "--no-session", "--no-context-files", "--approve", "-e", probe, "-p", "/menu-integration"], { cwd, env: { ...process.env, HOME: root, PI_CODING_AGENT_DIR: agent }, timeout: 25000 });
+  run.child.stdin.end();
+  await run;
+  assert.deepEqual(JSON.parse(await readFile(output, "utf8")), { model: "gpt-6-astra", thinking: "high", confirmed: 1, remaining: 0 });
+  const state = await readPoolState(path);
+  assert.equal(state.enabled, true);
+  assert.equal(state.accounts.length, 1, "declining confirmation preserves the saved login");
+});
 
 for (const deferBeforeFetch of [false, true]) {
   test(`public registry completion pins background account and ${deferBeforeFetch ? "rechecks admission before fetch" : "never fails over a submitted quota response"}`, { timeout: 30000 }, async t => {
