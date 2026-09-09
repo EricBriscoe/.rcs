@@ -204,18 +204,20 @@ test("installed adapter routing retains structured quota evidence and simple rea
   const agent = join(root, "agent"), cwd = join(root, "project"), output = join(root, "route.json"), probe = join(root, "route.ts");
   const payload = Buffer.from(JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "fixture" } })).toString("base64url");
   const token = `x.${payload}.x`;
+  const loginToken = `login.${payload}.x`;
   await mkdir(cwd, { recursive: true });
   await mkdir(agent, { recursive: true });
   await writeFile(join(agent, "settings.json"), "{}");
+  await writeFile(join(agent, "auth.json"), JSON.stringify({ "openai-codex": { type: "oauth", access: loginToken, refresh: "fixture-refresh", expires: 4_102_444_800_000, accountId: "fixture" } }));
   await updatePoolState(state => {
     state.enabled = true;
     state.accounts.push({ ...account("first", "first", 4_102_444_800_000), access: token }, { ...account("second", "second", 4_102_444_800_000), access: token });
   }, path);
-  await writeFile(probe, `import {writeFileSync} from 'node:fs'; import {zstdDecompressSync} from 'node:zlib'; export default function(pi) { pi.registerCommand('pool-route',{handler:async(_args,ctx)=>{const provider=ctx.modelRegistry.getProvider('openai-codex'); const model=provider.getModels()[0]; let calls=0; const efforts=[]; const events=[]; const stream=provider.streamSimple(model,{messages:[]},{reasoning:'high',fetch:async(_url,init)=>{calls++; let body=Buffer.from(init.body); if(init.headers.get('content-encoding')==='zstd') body=zstdDecompressSync(body); efforts.push(JSON.parse(body.toString()).reasoning?.effort); return new Response(JSON.stringify({error:{code:'usage_limit_reached',message:'quota'}}),{status:429,headers:{'retry-after':'1'}});}}); for await(const event of stream) events.push(event.type); writeFileSync(${JSON.stringify(output)},JSON.stringify({calls,efforts,events}));}}); }`);
+  await writeFile(probe, `import {writeFileSync} from 'node:fs'; import {zstdDecompressSync} from 'node:zlib'; export default function(pi) { pi.registerCommand('pool-route',{handler:async(_args,ctx)=>{const provider=ctx.modelRegistry.getProvider('openai-codex'); const model=provider.getModels()[0]; const auth=await ctx.modelRegistry.getApiKeyAndHeaders(model); if(!auth.ok || auth.apiKey!==${JSON.stringify(loginToken)}) throw Error('Stored subscription OAuth did not resolve'); let calls=0; const efforts=[]; const events=[]; const stream=provider.streamSimple(model,{messages:[]},{reasoning:'high',apiKey:auth.apiKey,fetch:async(_url,init)=>{if(init.headers.get('authorization')!==${JSON.stringify('Bearer '+token)}) throw Error('Pool did not use its subscription token'); calls++; let body=Buffer.from(init.body); if(init.headers.get('content-encoding')==='zstd') body=zstdDecompressSync(body); efforts.push(JSON.parse(body.toString()).reasoning?.effort); return new Response(JSON.stringify({error:{code:'usage_limit_reached',message:'quota'}}),{status:429,headers:{'retry-after':'1'}});}}); for await(const event of stream) events.push(event.type); writeFileSync(${JSON.stringify(output)},JSON.stringify({calls,efforts,events}));}}); }`);
   const run = exec(process.execPath, [cli, "--offline", "--no-session", "--no-context-files", "--approve", "-e", join(checkout, "pi/extensions/codex-account-pool"), "-e", probe, "-p", "/pool-route"], { cwd, env: { ...process.env, HOME: root, PI_CODING_AGENT_DIR: agent }, timeout: 25000 });
   run.child.stdin.end();
   const { stdout, stderr } = await run;
-  assert.doesNotMatch(stdout + stderr, /Failed to load extension|Cannot find module/);
+  assert.doesNotMatch(stdout + stderr, /Failed to load extension|Cannot find module|Stored subscription OAuth did not resolve|Pool did not use its subscription token/);
   assert.deepEqual(JSON.parse(await readFile(output, "utf8")), { calls: 2, efforts: ["high", "high"], events: ["error"] });
   assert.equal((await readPoolState(path)).accounts.every(value => value.exhausted), true);
 });

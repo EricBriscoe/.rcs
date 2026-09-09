@@ -145,6 +145,60 @@ add-zsh-hook precmd _tab_title
 claude-work()     { CLAUDE_CONFIG_DIR="$HOME/.claude/envs/work"     claude "$@"; }
 claude-personal() { CLAUDE_CONFIG_DIR="$HOME/.claude/envs/personal" claude "$@"; }
 
+# Codex multi-account: account homes keep credentials and runtime state
+# separate while stable harness configuration links back to ~/.codex.
+_codex_account() {
+  emulate -L zsh
+  umask 077
+
+  local account=$1
+  shift
+  case $account in
+    work|personal) ;;
+    *) print -u2 "codex account must be work or personal"; return 2 ;;
+  esac
+
+  local shared_home="$HOME/.codex"
+  local account_home="$shared_home/envs/$account"
+  local account_path shared_path name
+  local -a shared_names=(
+    AGENTS.md
+    config.toml
+    deep.config.toml
+    fast.config.toml
+    hooks.json
+    automations
+    hooks
+    memories
+    plugins
+    policy
+    rules
+    skills
+    vendor_imports
+  )
+
+  mkdir -p "$account_home" || return
+  for name in $shared_names; do
+    shared_path="$shared_home/$name"
+    account_path="$account_home/$name"
+    [[ -e "$shared_path" || -L "$shared_path" ]] || continue
+    if [[ -e "$account_path" || -L "$account_path" ]]; then
+      if [[ "${account_path:A}" != "${shared_path:A}" ]]; then
+        print -u2 "refusing to replace non-shared Codex path: $account_path"
+        return 1
+      fi
+      continue
+    fi
+    ln -s "$shared_path" "$account_path" || return
+  done
+
+  CODEX_HOME="$account_home" command codex \
+    -c "notify=[\"$shared_home/computer-use/Codex Computer Use.app/Contents/SharedSupport/SkyComputerUseClient.app/Contents/MacOS/SkyComputerUseClient\",\"turn-ended\"]" \
+    "$@"
+}
+codex-work()     { _codex_account work "$@"; }
+codex-personal() { _codex_account personal "$@"; }
+
 # Machine-local / private config (e.g. work-specific functions, paths, secrets).
 # Not versioned; lives only on machines that need it. Sourced last so it can use
 # the helpers above (e.g. _auto_venv) and override anything.

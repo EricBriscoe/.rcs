@@ -246,6 +246,7 @@ function poolProvider(): Provider<any> {
     id: PROVIDER_ID,
     name: "OpenAI Codex (account pool)",
     baseUrl: "https://chatgpt.com/backend-api",
+    // Stored subscription logins require an OAuth handler before pool routing.
     auth: { oauth: officialOAuth, apiKey: {
       name: "ChatGPT Codex account pool",
       // Registered only while enabled. Keep readiness synchronous: Pi startup

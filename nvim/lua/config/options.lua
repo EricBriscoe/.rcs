@@ -1,29 +1,36 @@
-vim.g.mapleader = " "
-vim.g.maplocalleader = " "
+-- Options are automatically loaded before lazy.nvim startup
+-- Default options that are always set: https://github.com/LazyVim/LazyVim/blob/main/lua/lazyvim/config/options.lua
 
-vim.opt.number = true
-vim.opt.relativenumber = true
-vim.opt.signcolumn = "yes"
-vim.opt.cursorline = true
-vim.opt.termguicolors = true
-vim.opt.updatetime = 250
-vim.opt.timeoutlen = 400
-vim.opt.splitright = true
-vim.opt.splitbelow = true
-vim.opt.ignorecase = true
-vim.opt.smartcase = true
-vim.opt.undofile = true
-vim.opt.expandtab = true
-vim.opt.shiftwidth = 4
-vim.opt.tabstop = 4
-vim.opt.softtabstop = 4
-vim.opt.completeopt = { "menu", "menuone", "noinsert", "fuzzy", "popup" }
+-- Language extras: basedpyright + ruff for Python, vtsls for TypeScript.
+vim.g.lazyvim_python_lsp = "basedpyright"
+vim.g.lazyvim_python_ruff = "ruff"
 
-vim.diagnostic.config({
-  virtual_text = { source = "if_many", spacing = 2 },
-  severity_sort = true,
-  float = { border = "rounded", source = true },
+-- Only run prettier when the project ships a prettier config; every other
+-- project keeps its own formatter (biome, ruff, ...).
+vim.g.lazyvim_prettier_needs_config = true
+
+-- Prefer the git root over the LSP root, so pickers and terminals in a
+-- monorepo (or a worktree of one) work from the repository, not a package.
+vim.g.root_spec = { { ".git" }, "lsp", "cwd" }
+
+-- Four-space indentation matches the tools used at work (ruff, biome,
+-- sqlfluff, shfmt); Lua is set to two in autocmds.lua to match stylua.
+local opt = vim.opt
+opt.shiftwidth = 4
+opt.tabstop = 4
+opt.softtabstop = 4
+
+vim.filetype.add({
+  extension = {
+    -- `.tf` defaults to TinyFugue unless content detection kicks in; nobody
+    -- edits TinyFugue. OpenTofu files are Terraform.
+    tf = "terraform",
+    tofu = "terraform",
+  },
+  pattern = {
+    -- Compose files are plain yaml by default; the dotted filetype is what the
+    -- docker-compose language server attaches to.
+    [".*/docker%-compose[^/]*%.ya?ml"] = "yaml.docker-compose",
+    [".*/compose%.ya?ml"] = "yaml.docker-compose",
+  },
 })
-
-vim.keymap.set("n", "[t", "gT", { desc = "Previous tab" })
-vim.keymap.set("n", "]t", "gt", { desc = "Next tab" })

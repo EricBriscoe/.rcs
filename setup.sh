@@ -69,5 +69,5 @@ ln -s "$REPO/sqlfluff"  "$HOME/.config/sqlfluff"
 say "Installing Pi and linking its settings"
 "$REPO/setup-pi.sh"
 
-say "Done. Open a new shell. nvim's first launch will bootstrap lazy.nvim + Mason."
-say "Machine-specific extras go in ~/.zshrc.local (and nvim/lua/local.lua), sourced if present."
+say "Done. Open a new shell. nvim's first launch will bootstrap lazy.nvim, LazyVim, and Mason."
+say "Machine-specific extras go in ~/.zshrc.local (and nvim/lua/plugins/local.lua), sourced if present."
