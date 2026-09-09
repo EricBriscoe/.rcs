@@ -10,7 +10,9 @@
   "showCacheMissNotices": false,
   "lastChangelogVersion": "0.85.1",
   "packages": [
-    "npm:pi-subagents"
+    "npm:pi-subagents",
+    "npm:pi-mcp-adapter@2.32.1",
+    "npm:pi-vim@0.14.2"
   ],
   "markdown": {
     "mermaid": "streaming"

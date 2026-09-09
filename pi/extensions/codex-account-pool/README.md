@@ -4,7 +4,7 @@ Opt-in priority failover for ChatGPT Plus/Pro **Codex OAuth** accounts. It prese
 
 Open `/codex-pool` for interactive settings: add an account, choose browser or device login, enable the pool, and select an account to re-login, change priority, refresh quota, or remove it (with confirmation). Escape goes back; Done closes settings. The footer points to this menu. `/codex-pool status` remains read-only; explicit subcommands and Tab completion also work.
 
-Pool credentials are separate from Pi’s `/login` and `/logout` store. Use `/codex-pool relogin NAME browser` to sign in again and `/codex-pool remove NAME` to remove a pool login. For ordinary single-account `/login openai-codex` and `/logout`, first run `/codex-pool disable`. The stock OpenAI OAuth option remains visible while the pool is enabled.
+Pool credentials are separate from Pi’s `/login` and `/logout` store. Use `/codex-pool relogin NAME browser` to sign in again and `/codex-pool remove NAME` to remove a pool login. For ordinary single-account `/login openai-codex` and `/logout`, first run `/codex-pool disable`. A standard subscription login can coexist; enabled pooling still uses pool accounts and quota.
 
 Use `enable NAME`, `disable NAME`, or `remove NAME` (confirmation required) for individual accounts; `disable` without a name restores stock Pi Codex behavior. `/codex-pool quota [NAME]` performs a read-only refresh for one or all accounts; `/codex-pool status` shows cached primary/secondary usage windows, update timestamp, and stale/unknown state. The compact status line shows the first eligible account's remaining percentage and reset. Login uses Pi's installed official Codex OAuth flow. `import` intentionally refuses to read an existing Pi credential; add each account explicitly.
 

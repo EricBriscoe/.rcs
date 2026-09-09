@@ -11,3 +11,6 @@ pi/sessions/
 pi/trust.json
 pi/models-store.json
 pi/settings-backup.*/
+
+# Machine-local LazyVim plugin spec.
+nvim/lua/plugins/local.lua
