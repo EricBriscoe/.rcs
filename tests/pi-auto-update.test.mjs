@@ -53,13 +53,13 @@ test('real launcher invokes updater every time, bypasses it for repair and prese
     await cp(new URL('../pi/' + path, import.meta.url), join(f.checkout, 'pi', path));
   }
   await f.put(join(f.checkout, 'pi/update-deps.mjs'), `import {appendFileSync} from 'node:fs'; export async function updateDependencies(){appendFileSync(${JSON.stringify(count)},'check\\n');}`);
-  await f.put(join(f.global, CORE, 'dist/cli.js'), `console.log(JSON.stringify({args:process.argv.slice(2),nested:process.env.PI_AUTO_UPDATE_ACTIVE,telemetry:process.env.RTK_TELEMETRY_DISABLED}));`);
+  await f.put(join(f.global, CORE, 'dist/cli.js'), `console.log(JSON.stringify({args:process.argv.slice(2),nested:process.env.PI_AUTO_UPDATE_ACTIVE,telemetry:process.env.RTK_TELEMETRY_DISABLED,ignoreScripts:process.env.npm_config_ignore_scripts,audit:process.env.npm_config_audit,fund:process.env.npm_config_fund}));`);
   const npm = join(f.root, 'bin/npm'); await f.put(npm, '#!/bin/sh\nprintf "%s\\n" "$FIXTURE_GLOBAL"\n'); await chmod(npm, 0o700);
   const env = { ...process.env, PATH: join(f.root, 'bin') + ':' + process.env.PATH, PI_CODING_AGENT_DIR: f.agent, FIXTURE_GLOBAL: f.global };
   delete env.PI_AUTO_UPDATE; delete env.PI_AUTO_UPDATE_ACTIVE; delete env.PI_SUBAGENT_CHILD; delete env.PI_OFFLINE;
   const launch = (args, extra = {}) => promisify(execFile)(process.execPath, [join(f.checkout, 'pi/launch.mjs'), ...args], { env: { ...env, ...extra } });
   const bypass = await launch(['--no-extensions', '--version'], { PI_AUTO_UPDATE: '0' });
-  assert.deepEqual(JSON.parse(bypass.stdout), { args: ['--no-extensions', '--version'], nested: '1', telemetry: '1' });
+  assert.deepEqual(JSON.parse(bypass.stdout), { args: ['--no-extensions', '--version'], nested: '1', telemetry: '1', ignoreScripts: 'true', audit: 'false', fund: 'false' });
   await assert.rejects(readFile(count), { code: 'ENOENT' });
   await launch(['--version']); await launch(['--version']);
   assert.equal(await readFile(count, 'utf8'), 'check\ncheck\n');
