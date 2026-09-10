@@ -132,5 +132,10 @@ test('Pi Markdown remains lean and maintenance stays on demand', async () => {
   const sizes = await Promise.all(owned.filter(path => existsSync(new URL(path, root))).map(async path => Buffer.byteLength(await readFile(new URL(path, root), 'utf8'))));
   assert.ok(sizes.reduce((sum, size) => sum + size, 0) < 33000, 'all owned Markdown budget, including new files');
   assert.match(files[1], /pi-maintenance/); assert.doesNotMatch(files[1], /no routine.*agents|\/orchestrate/);
-  assert.match(files[6], /python3 -m unittest/); assert.match(files[7], /No push/);
+  assert.match(files[6], /python3 -m unittest/);
+  assert.match(files[7], /then push/);
+  assert.match(files[7], /still push pending commits/);
+  assert.match(files[7], /configured upstream using an explicit remote\/refspec/);
+  assert.match(files[7], /never force-push or automatically pull\/rebase/);
+  assert.doesNotMatch(files[7], /No push|without pushing/);
 });
