@@ -61,8 +61,8 @@ function groupExists(pid) {
 }
 
 function signalGroup(pid, signal) {
-  try { process.kill(-pid, signal); }
-  catch (error) { if (error.code !== "ESRCH") throw error; }
+  try { process.kill(-pid, signal); return true; }
+  catch (error) { if (error.code === "ESRCH") return false; throw error; }
 }
 
 export class MonitorManager {
@@ -76,11 +76,35 @@ export class MonitorManager {
     this.closing = false;
   }
 
-  ownsGroup(record) {
-    if (record.groupGone || !record.child.pid) return false;
-    if (groupExists(record.child.pid)) return true;
-    record.groupGone = true;
-    return false;
+  groupFailure(record, operation, error) {
+    // An existence probe also checks permissions. EPERM is not proof of absence
+    // or continued ownership. Fence the numeric PGID rather than retrying a
+    // potentially recycled group later, and keep the unresolved record visible.
+    record.cleanupError ??= `Monitor ${record.id} process group ${record.child.pid}: ${operation} failed (${error.code ?? "unknown"}); cleanup unverified. No further group signals will be sent.`;
+    record.eventPending = true;
+  }
+
+  groupState(record) {
+    if (record.cleanupError) return "unverified";
+    if (record.groupGone || !record.child.pid) return "gone";
+    try {
+      if (groupExists(record.child.pid)) return "present";
+      record.groupGone = true;
+      return "gone";
+    } catch (error) {
+      this.groupFailure(record, "probe", error);
+      return "unverified";
+    }
+  }
+
+  signal(record, signal) {
+    try {
+      if (signalGroup(record.child.pid, signal)) record.stopRequested = true;
+      else record.groupGone = true;
+    } catch (error) {
+      this.groupFailure(record, signal, error);
+      throw new Error(record.cleanupError);
+    }
   }
 
   notify() {
@@ -94,6 +118,7 @@ export class MonitorManager {
       exitCode: record.exitCode, signal: record.signal, notifyOn: record.notifyOn,
       bufferedCharacters: record.output.length, droppedCharacters: record.output.dropped,
       ...(record.error ? { error: record.error } : {}),
+      ...(record.cleanupError ? { cleanupError: record.cleanupError } : {}),
     };
   }
 
@@ -103,8 +128,10 @@ export class MonitorManager {
     if (typeof command !== "string" || !command.trim()) throw new Error("command is required for start.");
     if (command.length > 4000) throw new Error("Monitor commands are limited to 4000 characters.");
     for (const [id, record] of this.monitors) {
-      if (record.closed && !record.output.length && !record.eventPending && !this.ownsGroup(record)) {
-        this.monitors.delete(id);
+      if (record.closed && !record.output.length && !record.eventPending) {
+        const state = this.groupState(record);
+        if (state === "gone") this.monitors.delete(id);
+        else if (state === "unverified") this.notify();
       }
     }
     if (this.monitors.size >= this.maxMonitors) {
@@ -139,8 +166,8 @@ export class MonitorManager {
     });
     child.on("close", () => {
       record.closed = true;
-      this.ownsGroup(record);
-      if (record.notifyOn === "completion") {
+      const group = this.groupState(record);
+      if (record.notifyOn === "completion" || group === "unverified") {
         record.eventPending = true;
         this.notify();
       }
@@ -202,16 +229,19 @@ export class MonitorManager {
     const record = this.get(id);
     if (record.stopping) return record.stopping;
     record.stopping = (async () => {
-      const pid = record.child.pid;
-      if (this.ownsGroup(record)) {
-        record.stopRequested = true;
-        signalGroup(pid, "SIGTERM");
+      const present = () => {
+        const state = this.groupState(record);
+        if (state === "unverified") throw new Error(record.cleanupError);
+        return state === "present";
+      };
+      if (present()) {
+        this.signal(record, "SIGTERM");
         const deadline = Date.now() + this.stopGraceMs;
-        while (this.ownsGroup(record) && Date.now() < deadline) await delay(25);
-        if (this.ownsGroup(record)) signalGroup(pid, "SIGKILL");
+        while (present() && Date.now() < deadline) await delay(25);
+        if (present()) this.signal(record, "SIGKILL");
         const killDeadline = Date.now() + 1000;
-        while (this.ownsGroup(record) && Date.now() < killDeadline) await delay(25);
-        if (this.ownsGroup(record)) throw new Error(`Monitor ${id} did not exit after SIGKILL.`);
+        while (present() && Date.now() < killDeadline) await delay(25);
+        if (present()) throw new Error(`Monitor ${id} did not exit after SIGKILL.`);
       }
       // Allow exit and final pipe data callbacks to finish before reporting.
       if (!record.closed) {
@@ -223,14 +253,19 @@ export class MonitorManager {
       return this.description(record);
     })();
     try { return await record.stopping; }
-    finally { record.stopping = null; }
+    catch (error) {
+      record.eventPending = true;
+      this.notify();
+      throw error;
+    } finally { record.stopping = null; }
   }
 
   async close() {
     this.closing = true;
     const results = await Promise.allSettled([...this.monitors.keys()].map((id) => this.stop(id)));
     const failures = results.filter((result) => result.status === "rejected");
-    if (failures.length) throw new AggregateError(failures.map((result) => result.reason), "Could not stop all monitors.");
+    if (failures.length) throw new AggregateError(failures.map((result) => result.reason),
+      `Could not verify cleanup of all monitors: ${failures.map(result => result.reason.message).join(" ")}`);
     this.monitors.clear();
   }
 }
