@@ -1,0 +1,11 @@
+{
+  "timeoutMs": 259200000,
+  "maxSubagentSpawnsPerRun": 1024,
+  "maxSubagentSpawnsPerSession": 0,
+  "control": {
+    "enabled": true,
+    "needsAttentionAfterMs": 900000,
+    "activeNoticeAfterMs": 1800000,
+    "notifyOn": ["active_long_running", "needs_attention"]
+  }
+}
