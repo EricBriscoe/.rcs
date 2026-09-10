@@ -1,14 +1,17 @@
 ---
 name: schlep
-description: Stage and commit all current repository changes, then push. Use only when invoked or explicitly asked to schlep, not when discussing this skill.
+description: Commit all changes, sync main, resolve conflicts, and push. Use only when explicitly invoked, not when discussing this skill.
 ---
 # Schlep
 
-1. Find the repository containing cwd; otherwise ask. Stop on detached HEAD, conflicts, or an active merge/rebase/cherry-pick/revert.
-2. Inspect status, diffs, and outgoing commits yourself. Stop on apparent secrets/private state; report paths, not values. No reviewers or other harnesses.
-3. Run `git add -A` at the root, including pre-existing, staged, unstaged, deleted, and untracked non-ignored changes. Do not silently omit files or force-add ignored ones.
-4. If staged changes exist, make one descriptive commit; otherwise skip committing but still push pending commits. Honor checks/hooks; stop on failure except `pi-maintenance`'s Markdown-budget repair.
-5. Push the current branch to its configured upstream using an explicit remote/refspec. If missing or ambiguous, ask for the destination. Invocation authorizes this push, including earlier unpushed commits. Stop on rejection; never force-push or automatically pull/rebase.
-6. Report commit hash, push result/destination, and remaining changes. Do not repeatedly commit newly arriving edits.
+Invocation authorizes this workflow without repeat confirmation; explicit limits win.
 
-No branch switching, amend, stash/discard, bypassed hooks, unsolicited implementation or unrelated check-fixing edits.
+1. Verify repo, branch, and remote. Inspect status, diffs, and outgoing commits yourself. Stop on detached HEAD, ambiguous destinations, or apparent secrets/private state (report paths, not values). No reviewers or other harnesses.
+2. Finish existing merges/rebases when intent is clear; preserve both sides' behavior. Stop on ambiguous conflicts or unrelated cherry-pick/revert state. Never abort/discard automatically.
+3. `git add -A` at the root includes all non-ignored changes, including pre-existing work and deletions. Commit staged changes descriptively; if empty, still push pending commits. Do not repeatedly sweep new edits.
+4. Fetch and integrate the verified remote's main/default branch. Prefer merge for published PR branches; continue existing rebases. Resolve safe conflicts. No new history rewrite or force-push without explicit authorization.
+5. Run required checks, coverage gates, and hooks on the final tree. Fix related regressions and rerun; stop on blockers, not merely missing coverage. Never bypass/weaken checks or make unrelated fixes. `pi-maintenance` permits Markdown-budget repair.
+6. Push commits and integration, including earlier unpushed commits, to the configured upstream using an explicit remote/refspec; ask if missing/ambiguous. This includes main/default when working there. Stop on rejection/divergence; never automatically pull/rebase after rejection. Never merge the PR or deploy.
+7. Report hashes, push/check results, remaining changes and risks. Tests alone do not establish merge safety.
+
+No branch switching, amend, stash/discard, force-add, or unsolicited implementation.
