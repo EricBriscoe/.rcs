@@ -35,7 +35,7 @@ Vim prompt editing is enabled: `Esc` enters Normal mode; `i` returns to Insert. 
 | Subagents | Stock delegation, workflows, fleet, and worktrees. `/subagents-guide`, `/subagents-fleet`, `/subagents-models`. [Setup](pi/SUBAGENTS.md) |
 | Questions | `ask_user`: choices or text; Escape/blank/unavailable UI is not approval. Interactive/RPC only. |
 | Background commands | `monitor` start requires `notifyOn: "output"` (live events) or `"completion"` (one final result). Session-owned; bounded output, manual read/stop available. |
-| Commit | `/skill:schlep`: stage all non-ignored changes and make one commit; **no push**. [Skill](pi/skills/schlep/SKILL.md) |
+| Commit + push | `/skill:schlep`: stage all non-ignored changes, commit, and push to the upstream. [Skill](pi/skills/schlep/SKILL.md) |
 | Maintenance | See [pi-maintenance](pi/skills/pi-maintenance/SKILL.md). |
 
 `web_search` uses Bing/DuckDuckGo without a key. `web_browse` supports pages, screenshots, and localhost. Both use temporary Playwright profiles. Open URLs before citing them. Login/CAPTCHA needs human input. `headed: true` shows the browser; close it before changing mode.
