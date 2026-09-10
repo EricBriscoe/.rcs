@@ -92,6 +92,8 @@ link_resource() {
 link_resource "$REPO/pi/settings.json" "$pi_agent_dir/settings.json" settings
 link_resource "$REPO/pi/models.json" "$pi_agent_dir/models.json" models
 link_resource "$REPO/pi/AGENTS.md" "$pi_agent_dir/AGENTS.md" instructions
+link_resource "$REPO/pi/SUBAGENTS.md" "$pi_agent_dir/SUBAGENTS.md" instructions
+link_resource "$REPO/pi/subagents.json" "$pi_agent_dir/extensions/subagent/config.json" subagent-config
 # Keep sibling names identical to the checkout: Pi's TypeScript loader resolves
 # ../memory imports relative to the symlink path, not its canonical target.
 for extension in web ask-user monitor memory project-context code-navigation efficiency codex-account-pool appearance model-briefing; do

@@ -74,6 +74,8 @@ class PiSetupTests(unittest.TestCase):
             (self.settings, REPO / "pi/settings.json"),
             (self.agent_dir / "models.json", REPO / "pi/models.json"),
             (self.instructions, REPO / "pi/AGENTS.md"),
+            (self.agent_dir / "SUBAGENTS.md", REPO / "pi/SUBAGENTS.md"),
+            (self.agent_dir / "extensions/subagent/config.json", REPO / "pi/subagents.json"),
             (self.web_extension, REPO / "pi/extensions/web"),
             (self.ask_extension, REPO / "pi/extensions/ask-user"),
             (self.monitor_extension, REPO / "pi/extensions/monitor"),
@@ -187,6 +189,24 @@ class PiSetupTests(unittest.TestCase):
         self.assertEqual(len(backups), 1)
         self.assertEqual(backups[0].read_text(), previous)
         self.assertEqual(self.settings.resolve(), REPO / "pi/settings.json")
+
+    def test_subagent_config_backs_up_conflicts_preserves_siblings_and_relinks_once(self):
+        directory = self.agent_dir / "extensions/subagent"
+        directory.mkdir(parents=True)
+        config = directory / "config.json"
+        previous = '{"timeoutMs": 1800000}\n'
+        config.write_text(previous)
+        sibling = directory / "local.json"
+        sibling.write_text('{"local": true}\n')
+        self.run_setup("--skip-install")
+        inode = config.lstat().st_ino
+        self.run_setup("--skip-install")
+        self.assert_resource_links()
+        self.assertEqual(config.lstat().st_ino, inode)
+        backups = list(self.agent_dir.glob("subagent-config-backup.*/config.json"))
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(backups[0].read_text(), previous)
+        self.assertEqual(sibling.read_text(), '{"local": true}\n')
 
     def test_astra_compaction_budget_is_model_specific(self):
         models = json.loads((REPO / "pi/models.json").read_text())
