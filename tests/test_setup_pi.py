@@ -343,6 +343,8 @@ class PiSetupTests(unittest.TestCase):
             "npm_config_ignore_scripts=true",
             "pi", "install", "npm:pi-vim@0.14.2",
             "npm_config_ignore_scripts=true",
+            "pi", "install", "npm:pi-chrome@0.15.49",
+            "npm_config_ignore_scripts=true",
             "update-deps",
         ])
         self.assert_resource_links()

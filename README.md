@@ -16,7 +16,7 @@ pi
 
 Full setup installs shell/editor tools and links these files. Optional local shell integrations load when present. Neovim installs plugins on first launch; `:Lazy sync` updates them.
 
-Pi setup installs Node ≥22.19, ripgrep, fd, Pi, Playwright/Chromium, checksum-verified RTK, and the packages in `pi/settings.json`, including `pi-subagents`, `pi-mcp-adapter`, and `pi-vim`. Conflicts are backed up; `--skip-install` only relinks.
+Pi setup installs Node ≥22.19, ripgrep, fd, Pi, Playwright/Chromium, checksum-verified RTK, and packages from `pi/settings.json`. Conflicts are backed up; `--skip-install` only relinks.
 
 On each Mac, `/login openai-codex` uses your OpenAI subscription. `/model` or `/thinking`, then Ctrl+S, saves defaults through the settings symlink. To sync: commit/push authorized source changes, then `git pull --ff-only`, rerun setup, restart Pi. Credentials stay local.
 
@@ -24,7 +24,7 @@ On each Mac, `/login openai-codex` uses your OpenAI subscription. `/model` or `/
 
 Vim prompt editing is enabled: `Esc` enters Normal mode; `i` returns to Insert. Motions, text objects, visual mode, `u` undo, and `Ctrl+r` redo work. In Normal mode, `:codex-pool` opens account settings.
 
-`${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/bin/pi` checks stable updates on launch. For repair: `PI_AUTO_UPDATE=0 pi --no-extensions`. Settings, extensions, themes, and skills link here; packages are in `pi/settings.json`. Project context can load the trusted workspace's `.pi/AGENTS.md`.
+`${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/bin/pi` checks updates on launch. Repair: `PI_AUTO_UPDATE=0 pi --no-extensions`. Resources link here; trusted workspace context includes `.pi/AGENTS.md`.
 
 | Feature | Usage / reference |
 |---|---|
@@ -38,9 +38,11 @@ Vim prompt editing is enabled: `Esc` enters Normal mode; `i` returns to Insert. 
 | Commit + push | `/skill:schlep`: stage all non-ignored changes, commit, and push to the upstream. [Skill](pi/skills/schlep/SKILL.md) |
 | Maintenance | See [pi-maintenance](pi/skills/pi-maintenance/SKILL.md). |
 
-`web_search` uses Bing/DuckDuckGo without a key. `web_browse` supports pages, screenshots, and localhost. Both use temporary Playwright profiles. Open URLs before citing them. Login/CAPTCHA needs human input. `headed: true` shows the browser; close it before changing mode.
+`pi-chrome`: `/reload`, `/chrome onboard`, manually load its Chrome companion, `/chrome authorize` (15m), `/chrome doctor`. `/chrome revoke` locks access. Preferred when authorized/connected; broad signed-in-profile access, with page content sent to the model.
 
-Keep credentials and runtime data outside Git/Obsidian. Permissions are not encryption or a sandbox. Subagents follow upstream behavior. Restart after setup; `/reload` refreshes loaded resources.
+`web_browse`/`web_search` remain isolated Playwright fallbacks, without Chrome cookies. Login/CAPTCHA needs human input. `headed: true` shows the fallback browser; close before changing mode.
+
+Keep credentials and runtime data outside Git/Obsidian. Permissions are not encryption or a sandbox. Restart after setup; `/reload` refreshes loaded resources.
 
 ## Checks
 
