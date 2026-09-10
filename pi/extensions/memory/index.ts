@@ -8,9 +8,10 @@ import { isQuotaExhaustion, quotaResetAt } from "./codex-quota.mjs";
 import { BackgroundDeferred } from "./budget.ts";
 import type { Admission } from "./budget.ts";
 import { Learner } from "./learner.ts";
-import { capture, GLOBAL_SCOPE, KINDS, memoryContext, projectIdentity, redact, safeText, topicKey } from "./policy.ts";
+import { buildMemoryContext, capture, GLOBAL_SCOPE, KINDS, projectIdentity, redact, safeText, topicKey } from "./policy.ts";
 import { MemoryStore } from "./store.ts";
-import { memoryStatus } from "./status.ts";
+import { learningOutcome, memoryStatus, recallStatus } from "./status.ts";
+import type { RecallStatus } from "./status.ts";
 import { LocalEmbedding } from './embedding.ts';
 import { HybridRetrieval } from './retrieval.ts';
 
@@ -53,16 +54,46 @@ export default function (pi: ExtensionAPI) {
   let baseline = new Set<string>();
   let generation = "";
   let recalled: string[] = [];
+  let recallChecked = false;
+  let recallError = false;
   let timestamp = Date.now();
   let learningError = false;
   const agent = process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent");
   const path = join(agent, "memory", "memory.sqlite");
 
+  function recallSnapshot(ctx: ExtensionContext): ReturnType<typeof buildMemoryContext> & RecallStatus {
+    const empty = (state: RecallStatus["state"]) => ({ state, count: 0, content: "", ids: [] as string[] });
+    if (!store || !ctx.isProjectTrusted() || recallError) return empty("unavailable");
+    if (!store.control(scope).reading) return empty("off");
+    const memories = recalled.flatMap(id => { try { const row = store!.get(scope, id); return row.active ? [row] : []; } catch { return []; } });
+    const packet = buildMemoryContext(memories);
+    if (packet.ids.length) return { ...packet, state: "recalled", count: packet.ids.length };
+    if (!store.list(scope, 1).length) return empty("empty");
+    return empty(recallChecked ? "no-match" : "not-run");
+  }
+
   function status(ctx: ExtensionContext) {
     if (!store) { ctx.ui.setStatus("rcs-memory", "memory: unavailable"); return; }
-    const learning = memoryStatus(store.stats(scope), learner?.admission, learningError);
+    const learning = memoryStatus(store.stats(scope), learner?.admission, learningError, learner?.lastOutcome);
     const search = retrieval?.status;
     ctx.ui.setStatus("rcs-memory", [learning, search && search !== 'hybrid' ? `memory: ${search}` : undefined].filter(Boolean).join(' · ') || undefined);
+    if (ctx.hasUI) ctx.ui.setWidget("rcs-memory-recall", [recallStatus(recallSnapshot(ctx))]);
+  }
+
+  function inspectStatus(ctx: ExtensionContext) {
+    const db = requireStore(ctx);
+    const stats = db.stats(scope, learner?.admission?.mode);
+    const { state, count } = recallSnapshot(ctx);
+    const diagnostics = [recallStatus({ state, count }),
+      "Recall is project-scoped plus approved global notes; note text stays ephemeral, not in the transcript.",
+      "Learning captures only fresh user/completed assistant text while idle; startup history is not imported.",
+      learner?.lastOutcome ? learningOutcome(learner.lastOutcome)
+        : "No learning outcome recorded since startup/reload; completed jobs do not necessarily save notes."];
+    if (learner?.admission && !learner.admission.allowed) diagnostics.push(`Learning admission: ${learner.admission.reason ?? "paused"}${learner.admission.nextAt ? `; retry at ${new Date(learner.admission.nextAt).toISOString()}` : ""}.`);
+    if (stats.daily.nextAt) diagnostics.push(`Machine-wide ${stats.dailyMode} budget: ${stats.daily.used}/${stats.daily.limit} requests in rolling 24h; next slot ${new Date(stats.daily.nextAt).toISOString()}. This limits learning, not recall.`);
+    return { root, ...stats, admission: learner?.admission ?? null, retrieval: retrieval?.status,
+      recall: { state, count }, lastLearning: learner?.lastOutcome ?? null,
+      learningBudgets: { fallback: db.dailyBudget(), quota: db.dailyBudget("quota") }, diagnostics };
   }
 
   function requireStore(ctx: ExtensionContext): MemoryStore {
@@ -105,6 +136,7 @@ export default function (pi: ExtensionAPI) {
   }
 
   async function close() {
+    if (activeContext?.hasUI) activeContext.ui.setWidget("rcs-memory-recall", undefined);
     activeContext = undefined;
     recallEpoch++;
     retrieval?.close();
@@ -114,6 +146,8 @@ export default function (pi: ExtensionAPI) {
     store?.close();
     store = undefined;
     recalled = [];
+    recallChecked = false;
+    recallError = false;
   }
 
   pi.on("session_start", async (_event, ctx) => {
@@ -245,6 +279,8 @@ export default function (pi: ExtensionAPI) {
   pi.on("before_agent_start", async (event, ctx) => {
     learner?.pause();
     recalled = [];
+    recallChecked = true;
+    recallError = false;
     timestamp = Date.now();
     const epoch = ++recallEpoch;
     const db = store;
@@ -254,13 +290,15 @@ export default function (pi: ExtensionAPI) {
         if (store === db && epoch === recallEpoch && ctx.isProjectTrusted()) recalled = db.recallRows(scope, rows).map(memory => memory.id);
       }
       status(ctx);
-    } catch { ctx.ui.setStatus("rcs-memory", "memory: recall unavailable"); }
+    } catch { recallError = true; status(ctx); }
   });
   pi.on("session_tree", (_event, ctx) => {
     learner?.pause();
     resetEvidence(ctx);
     recallEpoch++;
     recalled = [];
+    recallChecked = false;
+    recallError = false;
     status(ctx);
     learner?.wake();
   });
@@ -289,16 +327,21 @@ export default function (pi: ExtensionAPI) {
       return { ...message, content: [{ type: "text", text: JSON.stringify(details) }], details };
     });
     try {
-      if (!store || !ctx.isProjectTrusted() || !store.control(scope).reading) return { messages };
-      const memories = recalled.flatMap((id) => { try { const memory = store!.get(scope, id); return memory.active ? [memory] : []; } catch { return []; } });
-      const content = memoryContext(memories);
+      const snapshot = recallSnapshot(ctx);
+      const { content, ids } = snapshot;
       const position = messages.findLastIndex((message) => message.role === "user");
       if (content && position >= 0) messages.splice(position, 0, {
         role: "custom", customType: CONTEXT_TYPE, content, display: false,
-        details: { ids: memories.map((memory) => memory.id) }, timestamp,
+        details: { ids }, timestamp,
       });
+      // Refresh after every revalidation, including cross-process forget/read-off.
+      if (ctx.hasUI) ctx.ui.setWidget("rcs-memory-recall", [recallStatus(position >= 0 ? snapshot : { state: "not-run", count: 0 })]);
       return { messages };
-    } catch { return { messages }; } // A broken memory index must not break coding.
+    } catch {
+      recallError = true;
+      if (ctx.hasUI) ctx.ui.setWidget("rcs-memory-recall", [recallStatus({ state: "unavailable", count: 0 })]);
+      return { messages };
+    } // A broken memory index must not break coding.
   });
 
   pi.registerTool({
@@ -324,7 +367,7 @@ export default function (pi: ExtensionAPI) {
       let data;
       if (["search", "get"].includes(params.action) && !db.control(scope).reading) throw new Error("Memory recall is off. The user can enable it with /memory read on.");
       switch (params.action) {
-        case "status": data = { root, ...db.stats(scope), retrieval: retrieval?.status }; break;
+        case "status": data = inspectStatus(ctx); break;
         case "search": data = await db.candidates(scope, safeText(params.query, 1000, "Query"), 8, { signal, allowed: () => store === db && ctx.isProjectTrusted() }); break;
         case "get": data = db.get(scope, safeText(params.id, 80, "ID")); break;
         case "save": {
@@ -368,7 +411,7 @@ export default function (pi: ExtensionAPI) {
         let data: any;
         switch (action) {
           case "": case "help":
-            await show(ctx, `${HELP}\n\nStorage: ${path}\nScope: ${root}\n${JSON.stringify({ ...db.stats(scope), admission: learner?.admission, retrieval: retrieval?.status }, null, 2)}`); return;
+            await show(ctx, `${HELP}\n\nStorage: ${path}\nScope: ${root}\n${JSON.stringify(inspectStatus(ctx), null, 2)}`); return;
           case "list": data = db.list(target); break;
           case "retired": data = db.list(target, 100, true); break;
           case "changes": data = db.changes(target); break;
@@ -406,7 +449,7 @@ export default function (pi: ExtensionAPI) {
             if (action === "learn") {
               resetEvidence(ctx);
               if (value === "on") learner?.wake();
-            } else { recallEpoch++; recalled = []; }
+            } else { recallEpoch++; recalled = []; recallChecked = false; recallError = false; }
             data = db.stats(scope); break;
           case "budget": {
             if (global) throw new Error("Budget is machine-local, not a global memory.");

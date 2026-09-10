@@ -185,9 +185,9 @@ test("memory is quiet at rest but preserves disabled, failed, deferred and learn
   assert.match(memoryStatus({ ...stats, learning: false }), /learning off/);
   assert.match(memoryStatus(stats, undefined, true), /deferred.*\/memory/);
   const queued = { ...stats, jobs: [{ state: "pending", count: 3 }] };
-  assert.equal(memoryStatus(queued), undefined);
-  assert.equal(memoryStatus(queued, { allowed: false, mode: "fallback", reason: "working" }), undefined);
+  assert.match(memoryStatus(queued), /queued.*idle/);
+  assert.match(memoryStatus(queued, { allowed: false, mode: "fallback", reason: "working" }), /queued.*idle/);
   assert.match(memoryStatus(queued, { allowed: false, mode: "quota", reason: "quota exhausted" }), /paused: quota exhausted.*\/memory/);
-  assert.match(memoryStatus(queued, { allowed: true, mode: "fallback" }), /learning \(fallback\)/);
+  assert.match(memoryStatus({ ...stats, jobs: [{ state: "running", count: 1 }] }, { allowed: true, mode: "fallback" }), /learning \(fallback\)/);
   assert.match(memoryStatus({ ...stats, jobs: [{ state: "failed", count: 1 }] }), /failed.*\/memory retry/);
 });

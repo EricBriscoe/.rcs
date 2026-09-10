@@ -363,7 +363,22 @@ test("background learner commits validated output and removes the captured paylo
   await learner.run();
   assert.equal(store.list("A").length, 1);
   assert.equal(store.stats("A").learningTokens, 42);
+  assert.equal(learner.lastOutcome.saved, 1);
+  assert.equal(learner.lastOutcome.proposed, 1);
+  assert.deepEqual(learner.lastOutcome.skipped, {});
   assert.equal(store.db.prepare("SELECT payload FROM jobs").get().payload, null);
+});
+
+test('learning diagnostics count ignored proposals without calling them saves', async t => {
+  const { store } = fixture(t);
+  store.save('A', note(), { manual: true });
+  store.enqueue('A', payload());
+  const learner = new Learner(store, 'A', async () => ({ text: extraction(), tokens: 1 }), () => true, () => {});
+  t.after(() => learner.close());
+  await learner.run();
+  assert.equal(learner.lastOutcome.proposed, 1);
+  assert.equal(learner.lastOutcome.saved, 0);
+  assert.deepEqual(learner.lastOutcome.skipped, { 'existing-topic': 1 });
 });
 
 test("reload cancels a provider that ignores abort, requeues durably and cannot commit late", async (t) => {
@@ -378,6 +393,7 @@ test("reload cancels a provider that ignores abort, requeues durably and cannot 
   resolve({ text: extraction(), tokens: 1 });
   await delay(5);
   assert.equal(store.list("A").length, 0);
+  assert.equal(learner.lastOutcome, undefined);
   const job = store.claim("A");
   assert.ok(job);
   assert.equal(job.attempts, 2, "submitted interruptions remain bounded attempts");
@@ -391,6 +407,7 @@ test("invalid extraction fails atomically without persisting model output", asyn
   await learner.run();
   assert.equal(store.list("A").length, 0);
   assert.ok(!JSON.stringify(store.db.prepare("SELECT * FROM jobs").all()).includes("should-not-be-stored"));
+  assert.equal(learner.lastOutcome, undefined);
 });
 
 test("abortable handles cancellation without waiting for a hung provider", async () => {
