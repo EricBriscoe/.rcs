@@ -2,7 +2,7 @@
 
 **State:** `${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/memory/memory.sqlite` (0700 directory, 0600 DB/WAL). Worktrees share scope; clones do not. Outside Git: starting cwd, not shell `cd`. Untrusted projects blocked; not a sandbox.
 
-**Visibility:** above-editor **Recalled N memories** counts capped/revalidated notes; otherwise shows empty/no-match/off/unavailable. `/memory` and tool status explain scope, budgets and last learning outcome (since startup/reload only); empty extraction ≠ error. Footer: learning queue, failures, pauses.
+**Visibility:** **Recalled N memories** above the editor counts capped/revalidated notes; otherwise empty/no-match/off/unavailable. `/memory`/tool status: scope, budgets, last learning outcome since startup/reload (empty ≠ error). Footer: learning queue, failures, pauses.
 
 **Recall:** local semantic vectors + stemmed FTS5/BM25, reciprocal rank fusion (k=60, ≤30/branch, cosine ≥0.40). Same ≤8 records/4 pins/6,500 characters, ephemeral context. SQLite revalidates active IDs/revisions/scopes; search/get retains provenance, never authorization.
 
