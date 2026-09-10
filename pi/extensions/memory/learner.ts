@@ -15,6 +15,8 @@ export async function abortable<T>(promise: Promise<T>, signal: AbortSignal): Pr
   finally { signal.removeEventListener("abort", listener!); }
 }
 
+export type LearningOutcome = { at: number; proposed: number; saved: number; skipped: Record<string, number> };
+
 export class Learner {
   store: MemoryStore;
   scope: string;
@@ -26,6 +28,7 @@ export class Learner {
   running?: Promise<void>;
   closed = false;
   admission?: Admission;
+  lastOutcome?: LearningOutcome;
   admit: (signal: AbortSignal) => Promise<Admission>;
 
   constructor(store: MemoryStore, scope: string, complete: Learner["complete"], idle: () => boolean, changed: Learner["changed"], admit: Learner["admit"] = async () => ({ allowed: true, mode: "fallback" })) {
@@ -95,7 +98,14 @@ export class Learner {
           if (!this.idle()) controller.abort("paused");
           if (signal.aborted || this.closed) throw new Error("Cancelled");
           if (Buffer.byteLength(output.text) > 30000) throw new Error("Extraction output exceeds budget.");
-          this.store.finish(job, parseCandidates(output.text, job.payload, data.existing), output.tokens, data.existing);
+          const candidates = parseCandidates(output.text, job.payload, data.existing);
+          // Do not label a revoked/invalidated batch as a successful empty extraction.
+          if (this.store.liveBatch(job)) {
+            const results = this.store.finish(job, candidates, output.tokens, data.existing);
+            const skipped: Record<string, number> = {};
+            for (const result of results) if (result.skipped) skipped[result.skipped] = (skipped[result.skipped] ?? 0) + 1;
+            this.lastOutcome = { at: Date.now(), proposed: candidates.length, saved: results.filter(result => !result.skipped).length, skipped };
+          }
           this.notify();
         } catch (error) {
           // Classification is published before asynchronous pool persistence; abort may win that wait.

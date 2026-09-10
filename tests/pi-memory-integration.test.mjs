@@ -36,6 +36,7 @@ async function fixture(t, { trusted = true, history = [], embeddingAgent } = {})
   const notifications = [];
   const views = [];
   const statuses = [];
+  const widgets = [];
   const requests = [];
   let loaded;
   let completion = async (_model, context) => {
@@ -55,6 +56,7 @@ async function fixture(t, { trusted = true, history = [], embeddingAgent } = {})
     sessionManager: { getBranch: () => entries, getEntries: () => entries, getSessionId: () => "fixture-session" },
     ui: {
       notify: (...args) => notifications.push(args), setStatus: (...args) => statuses.push(args),
+      setWidget: (...args) => widgets.push(args),
       editor: async (_title, text) => { views.push(text); return undefined; }, confirm: async () => true,
     },
   };
@@ -81,7 +83,7 @@ async function fixture(t, { trusted = true, history = [], embeddingAgent } = {})
   });
   await load();
   return {
-    root, source, agent, entries, ctx, requests, statuses, notifications, views, emit,
+    root, source, agent, entries, ctx, requests, statuses, widgets, notifications, views, emit,
     complete: (fn) => { completion = fn; },
     command: (args) => loaded.extensions[0].commands.get("memory").handler(args, ctx),
     tool: (params) => loaded.extensions[0].tools.get("memory").definition.execute("fixture", params, undefined, undefined, ctx),
@@ -113,6 +115,9 @@ test("native Pi automatically captures, learns, retrieves ephemerally, reloads a
   let context = await f.emit("context", { messages });
   assert.equal(messages.length, 1, "does not mutate persisted conversation input");
   assert.equal(context.messages[0].customType, "rcs-memory-context");
+  assert.equal(context.messages[0].display, false, "note text stays ephemeral and hidden");
+  assert.match(f.widgets.at(-1)[1][0], /Recalled 1 memory/);
+  assert.equal(f.views.length, 0, "recall does not append transcript messages");
   assert.equal(context.messages.at(-1).role, "user");
   assert.equal(context.messages.filter((message) => message.customType === "rcs-memory-context").length, 1);
   context = await f.emit("context", { messages: context.messages });
@@ -134,10 +139,79 @@ test("native Pi automatically captures, learns, retrieves ephemerally, reloads a
   assert.ok(toolResult.content[0].text.includes("pnpm"), "the original chat is not secretly edited");
   context = await f.emit("context", { messages: context.messages });
   assert.equal(context.messages.length, 1, "forget invalidates active recall too");
+  assert.match(f.widgets.at(-1)[1][0], /no saved project or global notes/);
   assert.equal((await f.tool({ action: "status" })).details.memories, 0);
   await f.emit("agent_settled");
   assert.equal((await f.tool({ action: "status" })).details.jobs.some((job) => job.state === "pending"), false);
   assert.deepEqual(f.notifications, []);
+});
+
+test('recall widget and diagnostics stay scoped and react to external controls', async t => {
+  const f = await fixture(t);
+  assert.match(f.widgets.at(-1)[1][0], /no saved project or global notes/);
+  assert.equal((await f.tool({ action: 'status' })).details.lastLearning, null);
+  await f.command('remember build/tool | Use pnpm for dependencies.');
+  const note = JSON.parse(f.views.at(-1));
+  await f.emit('before_agent_start', { prompt: 'watermelon gardening' });
+  assert.match(f.widgets.at(-1)[1][0], /no matching notes/);
+  await f.emit('before_agent_start', { prompt: 'pnpm dependencies' });
+  const messages = [{ role: 'user', content: 'pnpm dependencies' }];
+  await f.emit('context', { messages });
+  assert.match(f.widgets.at(-1)[1][0], /Recalled 1 memory/);
+  const outside = new MemoryStore(join(f.agent, 'memory/memory.sqlite'));
+  try {
+    outside.setControl(note.scope, 'reading', false);
+    assert.deepEqual((await f.emit('context', { messages })).messages, messages);
+    assert.match(f.widgets.at(-1)[1][0], /recall off/);
+    outside.setControl(note.scope, 'reading', true);
+    outside.forget(note.scope, note.id);
+    await f.emit('context', { messages });
+    assert.match(f.widgets.at(-1)[1][0], /no saved project or global notes/);
+  } finally { outside.close(); }
+  await f.command('global remember communication | Keep explanations concise.');
+  await f.emit('before_agent_start', { prompt: 'watermelon gardening' });
+  assert.equal((await f.tool({ action: 'status' })).details.recall.count, 1, 'approved global pins still count');
+  await f.reload();
+  assert.ok(f.widgets.some(([, lines]) => lines === undefined), 'reload clears the old widget');
+  assert.match(f.widgets.at(-1)[1][0], /next prompt/);
+});
+
+test('empty learning is visible without storing extraction text or calling it an error', async t => {
+  const f = await fixture(t);
+  f.complete(async () => ({ stopReason: 'stop', usage: { totalTokens: 20 }, content: [{ type: 'text', text: '{"memories":[]}' }] }));
+  f.entries.push(user('routine', 'Hello'), assistant('reply', 'Hello!'));
+  await f.emit('agent_settled');
+  await waitFor(async () => (await f.tool({ action: 'status' })).details.lastLearning !== null);
+  const status = (await f.tool({ action: 'status' })).details;
+  assert.equal(status.lastLearning.proposed, 0);
+  assert.equal(status.lastLearning.saved, 0);
+  assert.match(status.diagnostics.join('\n'), /no durable memories proposed/);
+  assert.match(f.statuses.at(-1)[1], /no durable notes/);
+  assert.deepEqual(f.notifications, []);
+  await f.reload();
+  assert.equal((await f.tool({ action: 'status' })).details.lastLearning, null, 'outcomes are explicitly session-local');
+});
+
+test('budget diagnostics report the admitted mode and machine-wide rolling limits', async t => {
+  const f = await fixture(t);
+  const outside = new MemoryStore(join(f.agent, 'memory/memory.sqlite'));
+  try {
+    const insert = outside.db.prepare('INSERT INTO requests VALUES(?,?)');
+    for (let i = 0; i < 100; i++) insert.run(`budget-${i}`, Date.now());
+  } finally { outside.close(); }
+  f.entries.push(user('u1', 'Use pnpm'), assistant('a1', 'Understood'));
+  await f.emit('agent_settled');
+  await waitFor(async () => (await f.tool({ action: 'status' })).details.admission?.reason === 'daily budget');
+  const status = (await f.tool({ action: 'status' })).details;
+  assert.equal(status.dailyMode, 'fallback');
+  assert.equal(status.daily.used, 100);
+  assert.equal(status.learningBudgets.quota.limit, 100);
+  assert.match(status.diagnostics.join('\n'), /Machine-wide fallback budget: 100\/20.*next slot/);
+  assert.match(status.diagnostics.join('\n'), /not recall/);
+  assert.match(f.statuses.at(-1)[1], /paused: daily budget/);
+  assert.equal(f.requests.length, 0);
+  await f.command('');
+  assert.match(f.views.at(-1), /Machine-wide fallback budget/);
 });
 
 test("controls persist, commands inspect sources, global promotion is user-only, cancellation is not approval", async (t) => {

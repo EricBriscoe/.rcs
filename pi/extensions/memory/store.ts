@@ -511,10 +511,10 @@ export class MemoryStore {
       .run(this.now(), scope);
   }
 
-  stats(scope: string): any {
+  stats(scope: string, mode: "quota" | "fallback" = "fallback"): any {
     return {
       ...this.control(scope),
-      budget: this.budget(), daily: this.dailyBudget(), nextAt: this.nextReadyAt(scope),
+      budget: this.budget(), dailyMode: mode, daily: this.dailyBudget(mode), nextAt: this.nextReadyAt(scope),
       batches: (() => {
         let rows = this.pendingRows(scope, true), count = 0;
         while (rows.length) {
