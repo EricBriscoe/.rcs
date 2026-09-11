@@ -14,7 +14,7 @@ export PATH="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/bin:$PATH"
 pi
 ```
 
-Full setup installs shell/editor tools and links these files. Optional local shell integrations load when present. Neovim installs plugins on first launch; `:Lazy sync` updates them.
+Full setup installs shell/editor tools and links files; local shell integrations are optional. Neovim installs plugins on first launch; update with `:Lazy sync`.
 
 Pi setup installs Node ≥22.19, ripgrep, fd, Pi, Playwright/Chromium, checksum-verified RTK, and packages from `pi/settings.json`. Conflicts are backed up; `--skip-install` only relinks.
 
@@ -24,15 +24,17 @@ On each Mac, `/login openai-codex` uses your OpenAI subscription. `/model` or `/
 
 Vim prompt editing is enabled: `Esc` enters Normal mode; `i` returns to Insert. Motions, text objects, visual mode, `u` undo, and `Ctrl+r` redo work. In Normal mode, `:codex-pool` opens account settings.
 
-`${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/bin/pi` checks updates on launch. Repair: `PI_AUTO_UPDATE=0 pi --no-extensions`. Resources link here; trusted workspace context includes `.pi/AGENTS.md`.
+`${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/bin/pi` auto-updates all unpinned npm packages on launch. Repair: `PI_AUTO_UPDATE=0 pi --no-extensions`. Resources link here; trusted workspace context includes `.pi/AGENTS.md`.
 
 | Feature | Usage / reference |
 |---|---|
 | Appearance | Quiet Graphite + compact footer; Paper alternative in `/settings`. `/appearance compact\|stock`. [Guide](pi/extensions/appearance/README.md) |
 | File/code search | Native search plus read-only LSP/ast-grep. `/code-nav [reassess]`. [Guide](pi/extensions/code-navigation/README.md) |
 | Quiet output / RTK | Filtered output; raw artifacts retained. `/output raw\|auto`, `/tokens [all]`. [Guide](pi/extensions/efficiency/README.md) |
+| Context inspector | `/context usage` and `/context injections` inspect prompt/tool overhead without adding model tools. [Upstream](https://github.com/dimk90/pi-context-view) |
 | Memory | `/memory`: recall/learning; uses quota. Start in the target repo; shell `cd` does not change scope. [Guide](pi/extensions/memory/README.md) |
 | Subagents | Stock delegation, workflows, fleet, and worktrees. `/subagents-guide`, `/subagents-fleet`, `/subagents-models`. [Setup](pi/SUBAGENTS.md) |
+| Bigpowers | Skills/prompts only; hooks disabled. `/skill:using-bigpowers`. Project provisioning (`bigpowers init`) is opt-in. |
 | Questions | `ask_user`: choices or text; Escape/blank/unavailable UI is not approval. Interactive/RPC only. |
 | Background commands | `monitor` start requires `notifyOn: "output"` (live events) or `"completion"` (one final result). Session-owned; bounded output, manual read/stop available. |
 | Commit + push | `/skill:schlep`: stage all non-ignored changes, commit, and push to the upstream. [Skill](pi/skills/schlep/SKILL.md) |

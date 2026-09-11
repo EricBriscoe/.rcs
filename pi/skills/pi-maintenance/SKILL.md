@@ -15,13 +15,13 @@ Resolve `${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/settings.json` to `<checkout>/p
 | `pi/skills/`, `pi/prompts/` | On-demand resources |
 | `setup-pi.sh`, `tests/`, `README.md` | Installation, regression tests, usage |
 
-Read installed API docs/examples before changing extension contracts. Preserve symlinks and sibling directory names. Keep `pi-subagents` unversioned; use stock discovery, updates and controls. Put details here or in extension READMEs, not global instructions.
+Read installed API docs/examples before changing extension contracts. Preserve symlinks/sibling names. Keep `pi-subagents` unversioned and stock. Details belong here or in extension READMEs.
 
-Markdown budget: automatically trim redundancy, preserving safety rules, commands and limits. If useful content cannot reasonably fit, raise caps gradually. No confirmation needed; other check/commit rules still apply.
+Trim Markdown redundancy; preserve safety, commands and limits. Raise caps gradually only if needed, without confirmation. Check/commit rules still apply.
 
 Codex Astra: 416,384 context budget − 16,384 default reserve = ~400K compaction. Other models unchanged. Open `/model` or restart to reload overrides; provider limits apply.
 
-Each top-level launch checks latest stable Pi, pi-subagents, Playwright/Chromium, RTK, proper-lockfile and managed navigation tools. No CI/approval gate, npm scripts, Node/Homebrew upgrades or session restarts. Verify RTK checksums. State: agent-directory `updates/`, never `.rcs` definitions. Install only used navigation recipes; preserve custom/system servers. Failures warn/retry next launch; rollback is not guaranteed.
+Top-level launches update stable Pi, all unpinned npm packages in `pi/settings.json`, Playwright/Chromium, RTK, proper-lockfile and managed navigation tools. No CI/approval gate, npm scripts, Node/Homebrew upgrades or session restarts. Verify RTK checksums. State: agent-directory `updates/`, never `.rcs` definitions. Install only used navigation recipes; preserve custom/system servers. Failures warn/retry next launch; rollback is not guaranteed.
 
 Recovery: `PI_AUTO_UPDATE=0 pi --no-extensions` or `--offline`. Nested/child launches skip updates. `PI_AUTO_UPDATE=0 ./setup-pi.sh` uses bootstrap core/browser versions; `--skip-install` only relinks.
 
