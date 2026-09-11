@@ -123,8 +123,9 @@ link_resource "$REPO/pi/rtk.mjs" "$pi_agent_dir/bin/rtk" launcher
 link_resource "$REPO/pi/rtk.mjs" "$HOME/.local/bin/rtk" launcher
 if ! "$skip_install"; then
   packages="$(node -p 'require(process.argv[1]).packages.map(p => {
-    if (typeof p !== "string" || !p || /[\r\n]/.test(p)) throw new Error("Expected a package source string");
-    return p;
+    const source = typeof p === "string" ? p : p?.source;
+    if (typeof source !== "string" || !source || /[\r\n]/.test(source)) throw new Error("Expected a package source string");
+    return source;
   }).join("\n")' "$REPO/pi/settings.json")"
   while IFS= read -r package; do
     [[ -n "$package" ]] || continue

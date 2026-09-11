@@ -53,6 +53,21 @@ test("output buffer retains the bounded tail with stream labels and explicit los
   assert.deepEqual(buffer.take(5), { chunks: [], droppedCharacters: 0 });
 });
 
+test("monitor delivery removes only JSON whitespace, preserving every field and output byte", () => {
+  const updates = [{ id: 'mon-fixture', command: 'some command', cwd: '/space here', status: 'exited', exitCode: 7,
+    signal: null, notifyOn: 'completion', bufferedCharacters: 0, droppedCharacters: 23,
+    cleanupError: 'permission denied', chunks: [
+      { stream: 'stdout', text: '  indented\n\tcode  \nUnicode: 雪' },
+      { stream: 'stderr', text: 'Warning: retain this\n' },
+    ] }];
+  const message = monitorMessage({ drain: () => updates });
+  const body = message.content.slice(message.content.indexOf('\n') + 1);
+  assert.equal(body, JSON.stringify(updates));
+  assert.deepEqual(JSON.parse(body), updates);
+  assert.deepEqual(message.details.monitors, updates);
+  assert.ok(body.length < JSON.stringify(updates, null, 2).length);
+});
+
 test("monitor messages drain only new stdout/stderr and include the exit status", async (t) => {
   const { manager, cwd } = await fixture(t);
   const gate = join(cwd, "continue");

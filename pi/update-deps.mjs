@@ -10,7 +10,7 @@ import { installRtk } from './install-rtk.mjs';
 
 const exec = promisify(execFile);
 const CORE = '@earendil-works/pi-coding-agent', WEB = '@playwright/cli';
-const PACKAGE = 'pi-subagents', LOCK = 'proper-lockfile';
+const LOCK = 'proper-lockfile';
 const nameOf = spec => spec.slice(0, spec.lastIndexOf('@'));
 async function versionAt(path) { try { return JSON.parse(await readFile(path, 'utf8')).version; } catch { return undefined; } }
 async function privateDir(path) {
@@ -144,7 +144,15 @@ export async function updateDependencies(checkout, { agent = agentDirectory(), n
     const previous = runtimeDependencies(agent), current = { ...previous, npm: { ...previous.npm } };
     const baseline = JSON.parse(await readFile(join(checkout, 'pi/code-navigation.json'), 'utf8'));
     const ast = `@ast-grep/cli-${process.platform}-${process.arch}${process.platform === 'linux' ? '-gnu' : ''}`;
-    const names = [...new Set([CORE, WEB, PACKAGE, LOCK, ast, ...Object.values(baseline.servers).flatMap(recipe => (recipe.packages || []).map(nameOf))])];
+    const settings = JSON.parse(await readFile(join(checkout, 'pi/settings.json'), 'utf8'));
+    const sources = (settings.packages || []).map(entry => typeof entry === 'string' ? entry : entry.source);
+    // Follow stable releases for every unpinned npm package, including filtered
+    // entries. Explicit versions/refs and local paths remain owner-managed.
+    const packages = [...new Set(sources.flatMap(source => {
+      const name = /^npm:((?:@[^/]+\/)?[^@/]+)$/.exec(source)?.[1];
+      return name ? [name] : [];
+    }))];
+    const names = [...new Set([CORE, WEB, ...packages, LOCK, ast, ...Object.values(baseline.servers).flatMap(recipe => (recipe.packages || []).map(nameOf))])];
     const latest = {}, warnings = [];
     const warn = name => { warnings.push(name); log(`[pi update] ${name}: update unavailable/failed; continuing with installed dependencies. Use PI_AUTO_UPDATE=0 to bypass.`); };
     await Promise.all(names.map(async name => {
@@ -169,13 +177,12 @@ export async function updateDependencies(checkout, { agent = agentDirectory(), n
       try { await run('playwright-cli', ['install-browser', 'chromium'], { cwd: directory, env: { ...env, PLAYWRIGHT_SKIP_BROWSER_GC: '1' } }); current.chromium = current.npm[WEB]; }
       catch { warn('Chromium'); }
     }
-    const settings = JSON.parse(await readFile(join(checkout, 'pi/settings.json'), 'utf8'));
-    if (settings.packages?.includes(`npm:${PACKAGE}`)) await install(PACKAGE, join(agent, 'npm/node_modules', PACKAGE, 'package.json'), () =>
-      run(process.execPath, [join(global, CORE, 'dist/cli.js'), 'update', `npm:${PACKAGE}`], { cwd: directory, env }));
+    for (const name of packages) await install(name, join(agent, 'npm/node_modules', name, 'package.json'), () =>
+      run(process.execPath, [join(global, CORE, 'dist/cli.js'), 'update', `npm:${name}`], { cwd: directory, env }));
     // --no-save/--package-lock=false keeps the bootstrap manifest and lockfile unchanged.
     const pool = join(checkout, 'pi/extensions/codex-account-pool');
     await install(LOCK, join(pool, 'node_modules', LOCK, 'package.json'), () => run('npm', ['install', '--ignore-scripts', '--no-save', '--package-lock=false', `${LOCK}@${latest[LOCK]}`], { cwd: pool, env }));
-    const navigationNames = names.filter(name => ![CORE, WEB, PACKAGE, LOCK].includes(name));
+    const navigationNames = names.filter(name => ![CORE, WEB, ...packages, LOCK].includes(name));
     // Incomplete metadata must not downgrade one member of a coupled recipe to
     // its bootstrap version. Retry the group next launch instead.
     if (navigationNames.every(name => latest[name])) {
