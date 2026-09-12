@@ -44,6 +44,26 @@ export function filterFor(command: string, raw: string): string | undefined {
   if (["vitest", "npx", "pnpm"].includes(cmd) && words.includes("vitest") && /Test Files\s/.test(raw)) return "vitest";
   if (["rg", "grep"].includes(cmd) && !args.some(a => /^--(?:count|files|context|before|after)/.test(a)) && raw.split("\n").filter(Boolean).every(line => /^[^:]+:\d+:/.test(line))) return "grep";
 }
+// Factor only repeated path prefixes; never cap, deduplicate, reorder or shorten matches.
+// Unknown formats (context lines, truncation notices, binary/ANSI output) stay raw.
+export function groupedGrep(raw: string): string | undefined {
+  if (/[\u0000-\u0008\u000b-\u001f\u007f]/.test(raw)) return;
+  const lines = raw.split("\n");
+  if (lines.at(-1) === "") lines.pop();
+  const output = ["[Matches grouped by file; line numbers and text unchanged]"];
+  let previous: string | undefined;
+  for (const line of lines) {
+    // Filenames are unescaped: a second numeric delimiter could belong to a path.
+    if (line.match(/(?=:\d+:)/g)?.length !== 1) return;
+    const match = /^([^:]+):([1-9]\d*):(.*)$/.exec(line);
+    if (!match) return;
+    const [, file, number, text] = match;
+    if (file !== previous) { output.push(`${JSON.stringify(file)}:`); previous = file; }
+    output.push(`${number}:${text}`);
+  }
+  const result = output.join("\n");
+  return Buffer.byteLength(result) < Buffer.byteLength(raw) ? result : undefined;
+}
 export function quietTests(command: string, raw: string): string | undefined {
   const words = commandWords(command); if (!words || diagnostics(raw)) return;
   let pattern: RegExp;

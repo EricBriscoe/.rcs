@@ -10,6 +10,7 @@ import { usageReport } from '../pi/extensions/efficiency/usage.ts';
 const pkg = join(execFileSync('npm', ['root', '-g'], { encoding: 'utf8' }).trim(), '@earendil-works/pi-coding-agent');
 const { loadExtensionsCached, clearExtensionCache } = await import(pathToFileURL(join(pkg, 'dist/core/extensions/loader.js')));
 const { createBashTool } = await import(pathToFileURL(join(pkg, 'dist/core/tools/bash.js')));
+const { createGrepTool } = await import(pathToFileURL(join(pkg, 'dist/core/tools/grep.js')));
 const source = fileURLToPath(new URL('../pi/extensions/efficiency/index.ts', import.meta.url));
 const raw = Array.from({ length: 100 }, (_, i) => `✔ passing test ${i} (1.234ms)`).join('\n') + '\nℹ tests 100\nℹ fail 0\n';
 
@@ -79,6 +80,54 @@ test('filter absence/errors keep raw results without rerunning; native full logs
   const withLog = await f.emit('tool_result', { ...event('node --test', raw.slice(-1800)), details: { fullOutputPath: full } });
   assert.ok(withLog); assert.equal(await readFile(withLog.details.fullOutputPath, 'utf8'), raw);
   assert.equal(await readFile(full, 'utf8'), raw);
+});
+
+test('search reduction retains every match and line number with an exact raw artifact', async t => {
+  const f = await fixture(t);
+  const file = 'src/a-very-long-directory-name/another-long-component-name/example.ts';
+  const matches = Array.from({ length: 60 }, (_, i) => `${file}:${i + 1}: match ${i}: retain exact text  `);
+  const text = matches.join('\n');
+  const search = { toolName: 'grep', input: { pattern: 'match', context: 0 }, isError: false, content: [{ type: 'text', text }], details: {} };
+  const reduced = await f.emit('tool_result', search);
+  assert.ok(reduced, 'native grep should group repeated paths');
+  const shown = reduced.content[0].text;
+  assert.match(shown, /Reduced: grouped-grep/);
+  assert.equal(shown.split(file).length - 1, 1);
+  for (let i = 0; i < 60; i++) assert.ok(shown.includes(`${i + 1}: match ${i}: retain exact text  \n`), `match ${i} retained verbatim`);
+  assert.equal(await readFile(reduced.details.fullOutputPath, 'utf8'), text);
+  assert.ok(Buffer.byteLength(shown) < Buffer.byteLength(text) / 2);
+  assert.equal(search.content[0].text, text, 'input remains unchanged');
+  const shell = await f.emit('tool_result', event('rg -n match src', text));
+  assert.match(shell.content[0].text, /Reduced: grouped-grep/, 'shell searches must not use a lossy RTK filter');
+  for (const changed of [
+    { input: { pattern: 'match', context: 2 } },
+    { isError: true },
+    { details: { matchLimitReached: 60 } },
+    { details: { linesTruncated: true } },
+    { details: { truncation: { truncated: true } } },
+    { content: [{ type: 'text', text: text + '\n\n[Match limit reached]' }] },
+    { content: [{ type: 'text', text }, { type: 'image', data: 'unchanged' }] },
+  ]) assert.equal(await f.emit('tool_result', { ...search, ...changed }), undefined);
+  await f.command('output', 'raw');
+  assert.equal(await f.emit('tool_result', search), undefined);
+});
+
+test('installed native grep remains searchable and truncated results keep their notices', async t => {
+  const f = await fixture(t);
+  const name = 'a-long-source-filename-with-important-matches-and-whitespace.ts';
+  const source = Array.from({ length: 40 }, (_, i) => `const match${i} = ${i};  `).join('\n');
+  await writeFile(join(f.cwd, name), source);
+  const grep = createGrepTool(f.cwd);
+  const input = { pattern: 'match', path: f.cwd, limit: 100 };
+  const original = await grep.execute('native-grep', input, new AbortController().signal);
+  const reduced = await f.emit('tool_result', { ...original, input, toolName: 'grep', isError: false });
+  assert.ok(reduced);
+  assert.equal(await readFile(reduced.details.fullOutputPath, 'utf8'), original.content[0].text);
+  for (let i = 0; i < 40; i++) assert.ok(reduced.content[0].text.includes(`${i + 1}: const match${i} = ${i};  \n`));
+  const limited = await grep.execute('limited-grep', { ...input, limit: 20 }, new AbortController().signal);
+  assert.match(limited.content[0].text, /limit/i);
+  assert.equal(await f.emit('tool_result', { ...limited, input, toolName: 'grep', isError: false }), undefined);
+  assert.equal(await readFile(join(f.cwd, name), 'utf8'), source);
 });
 
 test('session usage is independent and summary events are deduplicated', async t => {

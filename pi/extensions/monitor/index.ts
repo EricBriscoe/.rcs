@@ -62,7 +62,7 @@ export default function (pi: ExtensionAPI) {
           data = await monitors.stop(params.id);
           break;
       }
-      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], details: data };
+      return { content: [{ type: "text", text: JSON.stringify(data) }], details: data };
     },
   });
 }

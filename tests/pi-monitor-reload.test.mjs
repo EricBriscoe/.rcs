@@ -97,6 +97,7 @@ test("Pi reload refreshes monitor helper exports and behavior through the instal
     action: "start", notifyOn: "output",
     command: `${quote(process.execPath)} -e ${quote("process.stdout.write('ready after reload'); setInterval(() => {}, 1000)")}`,
   }, ctx);
+  assert.equal(started.content[0].text, JSON.stringify(started.details), 'tool metadata uses compact, lossless JSON');
   await waitFor(() => sent.length === 1);
   assert.deepEqual(sent[0].options, { triggerTurn: true, deliverAs: "followUp" });
   assert.equal(sent[0].message.customType, "monitor-output");

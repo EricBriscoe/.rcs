@@ -11,9 +11,15 @@
   "lastChangelogVersion": "0.85.1",
   "packages": [
     "npm:pi-subagents",
-    "npm:pi-mcp-adapter@2.32.1",
-    "npm:pi-vim@0.14.2",
-    "npm:pi-chrome@0.15.49",
+    "npm:pi-mcp-adapter",
+    "npm:pi-vim",
+    "npm:pi-chrome",
+    {
+      "source": "npm:bigpowers",
+      "extensions": [],
+      "themes": []
+    },
+    "npm:pi-context-view",
     "npm:pi-memory@0.4.2"
   ],
   "markdown": {
