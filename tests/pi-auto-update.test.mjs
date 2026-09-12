@@ -23,7 +23,7 @@ async function fixture(t) {
   const manifest = name => name === 'pi-subagents' ? join(agent, 'npm/node_modules', name, 'package.json') : name === 'proper-lockfile' ? join(checkout, 'pi/extensions/codex-account-pool/node_modules', name, 'package.json') : join(global, name, 'package.json');
   for (const name of [CORE, WEB, 'pi-subagents', 'proper-lockfile']) await put(manifest(name), { name, version: '1.0.0' });
   const calls = [], logs = []; let metadata = 0;
-  const options = { agent, npmLatest: async () => { metadata++; return '2.0.0'; }, rtkLatest: async () => ({ version: '2.0.0', assets: {} }),
+  const options = { agent, checkoutUpdate: async () => {}, npmLatest: async () => { metadata++; return '2.0.0'; }, rtkLatest: async () => ({ version: '2.0.0', assets: {} }),
     rtkInstall: async (_agent, pins) => { calls.push(['rtk', pins.version]); }, navigationInstall: async (_agent, _baseline, versions) => { calls.push(['navigation', versions]); },
     log: line => logs.push(line), run: async (cmd, args, opts) => {
       calls.push([cmd, args, opts]);
@@ -92,6 +92,25 @@ test('updates only owned dependencies, uses stock package update and leaves chec
   assert.equal(f.metadata(), count * 2, 'no daily TTL: check again immediately');
   assert.ok(!f.calls.some(([cmd, args]) => cmd === 'npm' && args[0] === 'install'));
   assert.ok(!f.calls.some(([cmd]) => cmd === process.execPath || cmd === 'playwright-cli'));
+});
+
+test('checkout sync runs under the lock before reading dependency definitions; failures are nonfatal', async t => {
+  const f = await fixture(t);
+  let locked = false, synced = false;
+  const result = await updateDependencies(f.checkout, { ...f.options,
+    lock: (directory, fn) => updateLock(directory, async () => { locked = true; try { return await fn(); } finally { locked = false; } }),
+    checkoutUpdate: async (checkout) => {
+      assert.equal(locked, true); assert.equal(checkout, f.checkout);
+      await f.put(join(checkout, 'pi/code-navigation.json'), { servers: {} }); synced = true;
+    },
+    npmLatest: async () => { assert.equal(synced, true); return '2.0.0'; },
+    navigationInstall: async (_agent, baseline) => assert.deepEqual(baseline, { servers: {} }),
+  });
+  assert.deepEqual(result.warnings, []);
+  const failed = await updateDependencies(f.checkout, { ...f.options, checkoutUpdate: async () => { throw Error('PRIVATE_GIT_REMOTE'); } });
+  assert.ok(failed.warnings.includes('.rcs'));
+  assert.equal(failed.npm[CORE], '2.0.0');
+  assert.doesNotMatch(f.logs.join('\n'), /PRIVATE_GIT_REMOTE/);
 });
 
 test('offline metadata keeps installed selections, failures retry and errors never expose provider output', async t => {

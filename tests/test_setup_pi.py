@@ -21,7 +21,6 @@ class PiSetupTests(unittest.TestCase):
         self.web_extension = self.agent_dir / "extensions/web"
         self.ask_extension = self.agent_dir / "extensions/ask-user"
         self.monitor_extension = self.agent_dir / "extensions/monitor"
-        self.memory_extension = self.agent_dir / "extensions/memory"
         self.project_extension = self.agent_dir / "extensions/project-context"
         self.navigation_extension = self.agent_dir / "extensions/code-navigation"
         self.efficiency_extension = self.agent_dir / "extensions/efficiency"
@@ -35,21 +34,31 @@ class PiSetupTests(unittest.TestCase):
             env=self.env, cwd=REPO, capture_output=True, text=True, check=True,
         )
 
-    def stub_install_commands(self, npm_exit=0, browser_exit=0):
+    def stub_install_commands(self, npm_exit=0, browser_exit=0, qmd_present=False, qmd_exit=0):
         fake_bin = Path(self.temp.name) / "bin"
         fake_bin.mkdir()
         self.install_log = Path(self.temp.name) / "install.log"
+        # Isolate qmd discovery from the host, including npm/Bun installations.
+        bash_env = Path(self.temp.name) / "bash-env"
+        bash_env.write_text(
+            'command() {\n'
+            '  if [[ "$*" == "-v qmd" ]]; then\n'
+            f'    return {0 if qmd_present else 1}\n'
+            '  else builtin command "$@"; fi\n'
+            '}\n'
+        )
+        self.env["BASH_ENV"] = str(bash_env)
         scripts = {
             "node": (
                 'if [ "$1" = "-p" ]; then exec "$PI_SETUP_REAL_NODE" "$@"; fi\n'
                 'if [ "$2" = "install" ]; then printf "%s\\n" pi "$2" "$3" '
                 '"npm_config_ignore_scripts=${npm_config_ignore_scripts:-}" >> "$PI_SETUP_TEST_LOG"; fi\n'
                 'if [ "${1##*/}" = "update-deps.mjs" ]; then printf "%s\\n" update-deps >> "$PI_SETUP_TEST_LOG"; fi\n'
-                'if [ "${1##*/}" = "install-memory-embedding.mjs" ]; then printf "%s\\n" memory-embedding >> "$PI_SETUP_TEST_LOG"; fi\n'
                 'exit 0\n'
             ),
             "npm": (
                 'printf "%s\\n" npm "$@" >> "$PI_SETUP_TEST_LOG"\n'
+                f'if [ "${{3:-}}" = "@tobilu/qmd" ]; then exit {qmd_exit}; fi\n'
                 f"exit {npm_exit}\n"
             ),
             "playwright-cli": (
@@ -79,7 +88,6 @@ class PiSetupTests(unittest.TestCase):
             (self.web_extension, REPO / "pi/extensions/web"),
             (self.ask_extension, REPO / "pi/extensions/ask-user"),
             (self.monitor_extension, REPO / "pi/extensions/monitor"),
-            (self.memory_extension, REPO / "pi/extensions/memory"),
             (self.project_extension, REPO / "pi/extensions/project-context"),
             (self.navigation_extension, REPO / "pi/extensions/code-navigation"),
             (self.efficiency_extension, REPO / "pi/extensions/efficiency"),
@@ -104,7 +112,7 @@ class PiSetupTests(unittest.TestCase):
         sessions.mkdir()
         session = sessions / "test.jsonl"
         session.write_text("local session fixture\n")
-        memory = self.agent_dir / "memory/memory.sqlite"
+        memory = self.agent_dir / "memory/MEMORY.md"
         memory.parent.mkdir(mode=0o700)
         memory.write_bytes(b"local memory fixture")
         memory.chmod(0o600)
@@ -119,7 +127,7 @@ class PiSetupTests(unittest.TestCase):
         self.assert_resource_links()
         links = (
             self.settings, self.instructions, self.web_extension,
-            self.ask_extension, self.monitor_extension, self.memory_extension,
+            self.ask_extension, self.monitor_extension,
             self.project_extension,
             self.navigation_extension, self.efficiency_extension, self.briefing_extension, self.launcher,
         )
@@ -258,14 +266,19 @@ class PiSetupTests(unittest.TestCase):
         self.assertEqual(extensions[0].read_text(), "// Previous extension fixture\n")
         self.assert_resource_links()
 
-    def test_existing_memory_extension_is_backed_up_once(self):
-        self.memory_extension.mkdir(parents=True)
-        (self.memory_extension / "index.ts").write_text("// Previous memory extension\n")
+    def test_retired_memory_links_removed_and_user_replacements_preserved(self):
+        extensions = self.agent_dir / "extensions"
+        extensions.mkdir()
+        for name in ["memory", "rcs-memory"]:
+            (extensions / name).symlink_to(REPO / "pi/extensions/memory")
         self.run_setup("--skip-install")
+        for name in ["memory", "rcs-memory"]:
+            self.assertFalse((extensions / name).is_symlink())
+        replacement = extensions / "memory"
+        replacement.mkdir()
+        (replacement / "index.ts").write_text("// User replacement\n")
         self.run_setup("--skip-install")
-        backups = list(self.agent_dir.glob("extension-backup.*/memory/index.ts"))
-        self.assertEqual(len(backups), 1)
-        self.assertEqual(backups[0].read_text(), "// Previous memory extension\n")
+        self.assertEqual((replacement / "index.ts").read_text(), "// User replacement\n")
         self.assert_resource_links()
 
     def test_skills_use_standard_discovery_and_back_up_replacements(self):
@@ -332,9 +345,9 @@ class PiSetupTests(unittest.TestCase):
             "npm", "install", "-g", "--ignore-scripts",
             f"@earendil-works/pi-coding-agent@{pi_version}",
             f"@playwright/cli@{playwright_version}",
+            "npm", "install", "-g", "@tobilu/qmd",
             "playwright-cli", "install-browser", "chromium",
             "PLAYWRIGHT_SKIP_BROWSER_GC=1",
-            "memory-embedding",
             "npm", "ci", "--ignore-scripts", "--omit=dev", "--prefix",
             str(REPO / "pi/extensions/codex-account-pool"),
             "pi", "install", self.env["PI_SETUP_SUBAGENT_PIN"],
@@ -345,9 +358,27 @@ class PiSetupTests(unittest.TestCase):
             "npm_config_ignore_scripts=true",
             "pi", "install", "npm:pi-chrome@0.15.49",
             "npm_config_ignore_scripts=true",
+            "pi", "install", "npm:pi-memory@0.4.2",
+            "npm_config_ignore_scripts=true",
             "update-deps",
         ])
         self.assert_resource_links()
+
+    def test_existing_qmd_is_not_reinstalled(self):
+        self.stub_install_commands(qmd_present=True)
+        self.run_setup()
+        self.assertNotIn("@tobilu/qmd", self.install_log.read_text().splitlines())
+        self.assert_resource_links()
+
+    def test_failed_qmd_install_leaves_existing_resources_untouched(self):
+        self.stub_install_commands(qmd_exit=44)
+        self.settings.write_text("{}\n")
+        with self.assertRaises(subprocess.CalledProcessError) as failure:
+            self.run_setup()
+        self.assertEqual(failure.exception.returncode, 44)
+        self.assertFalse(self.settings.is_symlink())
+        self.assertEqual(self.settings.read_text(), "{}\n")
+        self.assertNotIn("playwright-cli", self.install_log.read_text().splitlines())
 
     def test_update_bypass_uses_bootstrap_versions_without_updater(self):
         self.stub_install_commands()
@@ -357,14 +388,13 @@ class PiSetupTests(unittest.TestCase):
         self.assertIn("@earendil-works/pi-coding-agent@" + (REPO / "pi/version").read_text().strip(), log)
         self.assertIn("@playwright/cli@" + (REPO / "pi/playwright-version").read_text().strip(), log)
         self.assertNotIn("update-deps", log)
-        self.assertIn("memory-embedding", log)
+        self.assertIn("@tobilu/qmd", log)
         self.assertIn("npm:pi-mcp-adapter@2.32.1", log)
 
-    def test_skip_install_never_downloads_embedding_runtime(self):
+    def test_skip_install_never_downloads_packages(self):
         self.stub_install_commands()
         self.run_setup("--skip-install")
         self.assertFalse(self.install_log.exists())
-        self.assertFalse((self.agent_dir / "tooling/memory-embedding").exists())
 
     def test_rtk_launcher_conflict_is_backed_up_and_reruns_are_idempotent(self):
         target = Path(self.temp.name) / ".local/bin/rtk"

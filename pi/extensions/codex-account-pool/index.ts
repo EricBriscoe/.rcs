@@ -7,12 +7,11 @@ import type { AssistantMessage, Context, Model, Provider, SimpleStreamOptions } 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { SettingsManager } from "@earendil-works/pi-coding-agent";
 import {
-  allExhaustedMessage, eligibleAccounts, isModelAccessError, isPoolAccountUnavailable, isQuotaExhaustion, loginAndAdd,
-  loginAndReplace, markExhausted, noteForegroundAccount, quotaResetAt, readPoolState, shouldFailover, resolveAccount,
+  allExhaustedMessage, eligibleAccounts, isModelAccessError, isPoolAccountUnavailable, loginAndAdd,
+  loginAndReplace, markExhausted, quotaResetAt, readPoolState, shouldFailover, resolveAccount,
   statusSummary, updatePoolState,
 } from "./pool.mjs";
 import { compactQuota, formatQuota, normalizeQuotaPayload, mergeQuotaHeaders } from "./quota.mjs";
-import { createBackgroundQuota } from "./background.mjs";
 import { createFooterController } from "./footer.mjs";
 import { openPoolMenu, POOL_HELP } from "./menu.mjs";
 import { completePoolArguments, loginWithRecovery } from "./auth-ui.mjs";
@@ -25,7 +24,6 @@ const officialOAuth = stockProvider?.auth.oauth;
 const responseAccountKeys = new Map<string, string>();
 
 type ResponseInfo = { status?: number; headers?: Record<string, string>; body?: string };
-const backgroundRequests = new Map<string, any>();
 let refreshFooter: (() => void) | undefined;
 
 function accountKey(accountId: string) {
@@ -102,19 +100,8 @@ function pooledStream(model: Model<any>, context: Context, options: any = {}, si
   const stream = createAssistantMessageEventStream();
   void (async () => {
     const initial = await readPoolState();
-    const background = backgroundRequests.get(options.sessionId);
-    const defer = async (admission: any) => {
-      background?.defer(admission);
-      for await (const event of errorStream(model, "Background memory deferred.")) stream.push(event);
-      stream.end();
-    };
-    if (background) {
-      const admission = await background.check();
-      if (!admission.allowed) { await defer(admission); return; }
-    }
-    const candidates = background ? eligibleAccounts(initial).filter(account => account.accountId === background.accountId).slice(0, 1) : eligibleAccounts(initial);
+    const candidates = eligibleAccounts(initial);
     if (candidates.length === 0) {
-      if (background) { await defer({ allowed: false, mode: "quota", reason: "account unavailable" }); return; }
       for await (const event of errorStream(model, allExhaustedMessage(initial))) stream.push(event);
       stream.end();
       return;
@@ -127,15 +114,10 @@ function pooledStream(model: Model<any>, context: Context, options: any = {}, si
         if (!officialOAuth) throw new Error("Official Codex OAuth is unavailable in this Pi installation.");
         account = await resolveAccount(candidate.accountId, officialOAuth, options.signal);
       } catch (error) {
-        if (background) { await defer({ allowed: false, mode: "quota", reason: "account unavailable" }); return; }
         if (isPoolAccountUnavailable(error)) continue;
         for await (const event of errorStream(model, safeAuthenticationError())) stream.push(event);
         stream.end();
         return;
-      }
-      if (background) {
-        const admission = await background.check();
-        if (!admission.allowed) { await defer(admission); return; }
       }
       let started = false;
       let failedOver = false;
@@ -150,24 +132,7 @@ function pooledStream(model: Model<any>, context: Context, options: any = {}, si
         // Do not let adapter retries obscure the terminal failure evidence.
         maxRetries: 0,
         fetch: quotaEvidenceFetch(async (input, init) => {
-          if (background) {
-            const admission = await background.check();
-            if (!admission.allowed) { background.defer(admission); throw new Error("Background memory deferred."); }
-            background.submitted = true;
-          }
           const result = await (options.fetch ?? globalThis.fetch)(input, init);
-          if (background && result.status === 429) {
-            const body = (await result.clone().text()).slice(0, 65536);
-            if (isQuotaExhaustion(body, result.status)) {
-              const observedAt = Date.now();
-              const resetAt = quotaResetAt(body, Object.fromEntries(result.headers.entries()), observedAt);
-              // Publish synchronously before the state lock/write: cancellation must
-              // preserve the owning batch even when it wins the completion race.
-              background.defer({ allowed: false, mode: "quota", reason: "subscription reserve", nextAt: resetAt ?? observedAt + 60000 });
-              await markExhausted(account.accountId, resetAt, undefined, true, observedAt);
-              refreshFooter?.();
-            }
-          }
           try {
             const headers = Object.fromEntries(result.headers.entries());
             if (mergeQuotaHeaders(undefined, headers)) await updatePoolState(state => {
@@ -189,17 +154,13 @@ function pooledStream(model: Model<any>, context: Context, options: any = {}, si
           ? stockAdapter.streamSimple(model as any, input, attemptOptions)
           : stockAdapter.stream(model as any, input, attemptOptions);
         for await (const event of inner) {
-          if (event.type === "start") {
-            started = true;
-            if (!background) { try { await noteForegroundAccount(account.accountId); } catch { /* A status hold cannot break coding. */ } }
-          }
+          if (event.type === "start") started = true;
           if (event.type === "done" && event.message.responseId) responseAccountKeys.set(event.message.responseId, accountKey(account.accountId));
           if (event.type !== "error" || started) {
             stream.push(event);
             if (event.type === "error" || event.type === "done") { stream.end(); return; }
             continue;
           }
-          if (background?.deferred) { await defer(background.deferred); return; }
           const message = event.error.errorMessage || "OpenAI Codex request failed";
           if (isModelAccessError(message)) {
             stream.push({ ...event, error: { ...event.error, errorMessage: `Codex account ${account.label} cannot use ${model.id}: ${message}` } });
@@ -212,13 +173,8 @@ function pooledStream(model: Model<any>, context: Context, options: any = {}, si
             return;
           }
           lastQuotaMessage = message;
-          await markExhausted(account.accountId, quotaResetAt(response.body ?? "", response.headers), undefined, !!background);
+          await markExhausted(account.accountId, quotaResetAt(response.body ?? "", response.headers));
           refreshFooter?.();
-          if (background) {
-            // The request was submitted and remains charged; never drain a backup.
-            await defer({ allowed: false, mode: "quota", reason: "subscription reserve" });
-            return;
-          }
           failedOver = true;
           break;
         }
@@ -332,22 +288,6 @@ async function loginAccount(label: string, method: string | undefined, ctx: any,
 }
 
 export default async function (pi: ExtensionAPI) {
-  const backgroundQuota = createBackgroundQuota({ refresh: refreshQuota });
-  // Public event bus + public sessionId option: only this exact request is pinned.
-  pi.events.on("rcs-memory:pool", (request: any) => {
-    request.service = {
-      prepare: backgroundQuota.prepare,
-      register(sessionId: string, accountId: string, check: () => Promise<any>, onDeferred?: (admission: any, submitted: boolean) => void) {
-        const entry: any = { accountId, check, submitted: false, deferred: undefined, defer(admission: any) {
-          if (entry.deferred) return;
-          entry.deferred = admission;
-          onDeferred?.(admission, entry.submitted);
-        } };
-        backgroundRequests.set(sessionId, entry);
-        return { entry, release() { backgroundRequests.delete(sessionId); } };
-      },
-    };
-  });
   let installed = false;
   const install = () => { if (!installed) { pi.registerProvider(poolProvider()); installed = true; } };
   const uninstall = () => { if (installed) { pi.unregisterProvider(PROVIDER_ID); installed = false; } };
@@ -411,9 +351,7 @@ export default async function (pi: ExtensionAPI) {
         if (label) {
           const account = state.accounts.find(candidate => candidate.label === label);
           if (!account) throw new Error(`No Codex account named ${label}.`);
-          const previousRoute = state.accounts.find(account => account.enabled)?.accountId;
           account.enabled = action === "enable";
-          if ((action === "disable" && state.backgroundHoldAccountId === account.accountId) || previousRoute !== state.accounts.find(account => account.enabled)?.accountId) delete state.backgroundHoldAccountId;
           if (action === "enable") { account.exhausted = false; delete account.resetAt; }
         } else state.enabled = action === "enable";
       });
@@ -441,10 +379,8 @@ export default async function (pi: ExtensionAPI) {
       await updatePoolState(state => {
         const index = state.accounts.findIndex(candidate => candidate.label === label);
         if (index < 0) throw new Error(`No Codex account named ${label}.`);
-        const previousRoute = state.accounts.find(account => account.enabled)?.accountId;
         const [account] = state.accounts.splice(index, 1);
         state.accounts.splice(Math.min(position - 1, state.accounts.length), 0, account);
-        if (previousRoute !== state.accounts.find(account => account.enabled)?.accountId) delete state.backgroundHoldAccountId;
       });
       await updateFooter(ctx);
       ctx.ui.notify(statusText(await readPoolState()), "info");
@@ -457,7 +393,6 @@ export default async function (pi: ExtensionAPI) {
       await updatePoolState(state => {
         const index = state.accounts.findIndex(candidate => candidate.label === label);
         if (index < 0) throw new Error(`No Codex account named ${label}.`);
-        if (state.backgroundHoldAccountId === state.accounts[index].accountId) delete state.backgroundHoldAccountId;
         state.accounts.splice(index, 1);
       });
       await updateFooter(ctx);
@@ -503,7 +438,6 @@ export default async function (pi: ExtensionAPI) {
 
   pi.on("session_shutdown", (_event, ctx) => {
     footer.shutdown(ctx);
-    backgroundRequests.clear();
     if (refreshFooter) refreshFooter = undefined;
   });
 

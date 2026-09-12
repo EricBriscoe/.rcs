@@ -14,24 +14,24 @@ export PATH="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/bin:$PATH"
 pi
 ```
 
-Full setup installs shell/editor tools and links these files. Optional local shell integrations load when present. Neovim installs plugins on first launch; `:Lazy sync` updates them.
+Full setup installs shell/editor tools and links resources. Neovim installs plugins on first launch; `:Lazy sync` updates them.
 
 Pi setup installs Node ≥22.19, ripgrep, fd, Pi, Playwright/Chromium, checksum-verified RTK, and packages from `pi/settings.json`. Conflicts are backed up; `--skip-install` only relinks.
 
-On each Mac, `/login openai-codex` uses your OpenAI subscription. `/model` or `/thinking`, then Ctrl+S, saves defaults through the settings symlink. To sync: commit/push authorized source changes, then `git pull --ff-only`, rerun setup, restart Pi. Credentials stay local.
+On each Mac, `/login openai-codex` uses your subscription; credentials stay local. `/model` or `/thinking`, then Ctrl+S, saves defaults through the settings symlink. Push authorized commits; Pi pulls on launch.
 
 ## Pi
 
 Vim prompt editing is enabled: `Esc` enters Normal mode; `i` returns to Insert. Motions, text objects, visual mode, `u` undo, and `Ctrl+r` redo work. In Normal mode, `:codex-pool` opens account settings.
 
-`${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/bin/pi` checks updates on launch. Repair: `PI_AUTO_UPDATE=0 pi --no-extensions`. Resources link here; trusted workspace context includes `.pi/AGENTS.md`.
+The Pi launcher pulls `.rcs` before dependency updates; [safeguards](pi/skills/pi-maintenance/SKILL.md). Repair: `PI_AUTO_UPDATE=0 pi --no-extensions`. Trusted workspace context includes `.pi/AGENTS.md`.
 
 | Feature | Usage / reference |
 |---|---|
 | Appearance | Quiet Graphite + compact footer; Paper alternative in `/settings`. `/appearance compact\|stock`. [Guide](pi/extensions/appearance/README.md) |
 | File/code search | Native search plus read-only LSP/ast-grep. `/code-nav [reassess]`. [Guide](pi/extensions/code-navigation/README.md) |
 | Quiet output / RTK | Filtered output; raw artifacts retained. `/output raw\|auto`, `/tokens [all]`. [Guide](pi/extensions/efficiency/README.md) |
-| Memory | `/memory`: recall/learning; uses quota. Start in the target repo; shell `cd` does not change scope. [Guide](pi/extensions/memory/README.md) |
+| Memory | Stock [pi-memory](https://github.com/jayzeng/pi-memory): daily logs, long-term notes and scratchpad in `~/.pi/agent/memory/`. `memory_status` reports health; setup installs `qmd` via npm if missing from PATH. Restart Pi to auto-create the search collection. |
 | Subagents | Stock delegation, workflows, fleet, and worktrees. `/subagents-guide`, `/subagents-fleet`, `/subagents-models`. [Setup](pi/SUBAGENTS.md) |
 | Questions | `ask_user`: choices or text; Escape/blank/unavailable UI is not approval. Interactive/RPC only. |
 | Background commands | `monitor` start requires `notifyOn: "output"` (live events) or `"completion"` (one final result). Session-owned; bounded output, manual read/stop available. |
@@ -60,7 +60,6 @@ Tests use the installed Pi package. Optional live checks:
 | `PI_RTK_LIVE=1` | `tests/pi-efficiency*.test.mjs` | RTK fixtures |
 | `PI_CODE_NAV_LIVE=1` | `tests/pi-code-navigation*.test.mjs` | Managed servers/AST tooling |
 | `PI_WEB_LIVE=1` | `tests/pi-web.test.mjs` | Chromium/local page; also verify public search separately |
-| `PI_MEMORY_LIVE=1` | `tests/pi-memory-live.test.mjs` | Synthetic provider extraction |
 
 Run as `ENV=1 node --test <glob>`; live model tests use existing login, never copied credentials.
 
@@ -72,7 +71,7 @@ MCP server connections belong in `~/.config/mcp/mcp.json`, outside this reposito
 
 ## Shell and other files
 
-[zshrc](zshrc) uses oh-my-zsh/robbyrussell, optional tool integrations, daily compinit caching, and branch tab titles. It selects Homebrew Python for virtualenvwrapper. Directory changes activate `<git-root>/venv` or `~/.venvs/<main-repo-name>` across worktrees; only these environments are deactivated automatically.
+[zshrc](zshrc) uses [Starship](https://starship.rs) for its prompt, with oh-my-zsh Git helpers, optional tool integrations, daily compinit caching, and branch tab titles. `./setup.sh` installs Starship through Homebrew (safe to rerun); shell startup only initializes it if installed. It selects Homebrew Python for virtualenvwrapper. Directory changes activate `<git-root>/venv` or `~/.venvs/<main-repo-name>` across worktrees; only these environments are deactivated automatically.
 
 - `olc [parent]`: open branch changes in VS Code; parent comes from the reflog, else main.
 - `cleandocker`: confirm, then remove all containers and prune Docker data.

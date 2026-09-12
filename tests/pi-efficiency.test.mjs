@@ -80,7 +80,7 @@ test('raw artifacts are private, bounded in count and recover native full logs',
 
 test('usage separates provider categories/cache counts from byte reductions and fences duplicate summaries', async t => {
   const root = await temp(t), usage = { input: 10, output: 5, cacheRead: 100, cacheWrite: 2, totalTokens: 117 };
-  for (const category of ['foreground', 'memory', 'worker', 'routing', 'supervision', 'compaction', 'branch-summary']) recordUsage(root, 'session', category, 'provider/model', usage, category);
+  for (const category of ['foreground', 'extension', 'worker', 'routing', 'supervision', 'compaction', 'branch-summary']) recordUsage(root, 'session', category, 'provider/model', usage, category);
   recordUsage(root, 'session', 'compaction', 'provider/model', usage, 'compaction');
   recordUsage(root, 'other', 'foreground', 'provider/model', { input: 7 });
   recordUsage(root, 'session', 'foreground', 'provider/model', undefined);
@@ -125,21 +125,21 @@ test('RTK installer verifies pinned archives, installs atomically, rejects tampe
 
 test('Pi Markdown remains lean and maintenance stays on demand', async () => {
   const root = new URL('../', import.meta.url);
-  const paths = ['README.md', 'pi/AGENTS.md', 'pi/extensions/memory/README.md', 'pi/SUBAGENTS.md', 'pi/extensions/code-navigation/README.md', 'pi/extensions/efficiency/README.md', 'pi/skills/pi-maintenance/SKILL.md', 'pi/skills/schlep/SKILL.md'];
+  const paths = ['README.md', 'pi/AGENTS.md', 'pi/SUBAGENTS.md', 'pi/extensions/code-navigation/README.md', 'pi/extensions/efficiency/README.md', 'pi/skills/pi-maintenance/SKILL.md', 'pi/skills/schlep/SKILL.md'];
   const files = await Promise.all(paths.map(path => readFile(new URL(path, root), 'utf8')));
   assert.ok(Buffer.byteLength(files[1]) < 2500, 'global instructions budget');
   const owned = [...new Set(execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', 'README.md', ':(glob)pi/**/*.md'], { cwd: root, encoding: 'utf8' }).split('\0').filter(Boolean))];
   const sizes = await Promise.all(owned.filter(path => existsSync(new URL(path, root))).map(async path => Buffer.byteLength(await readFile(new URL(path, root), 'utf8'))));
   assert.ok(sizes.reduce((sum, size) => sum + size, 0) < 33500, 'all owned Markdown budget, including new files');
   assert.match(files[1], /pi-maintenance/); assert.doesNotMatch(files[1], /no routine.*agents|\/orchestrate/);
-  assert.match(files[6], /python3 -m unittest/);
-  assert.match(files[7], /still push pending commits/);
-  assert.match(files[7], /configured upstream using an explicit remote\/refspec/);
-  assert.match(files[7], /never automatically pull\/rebase after rejection/);
-  assert.doesNotMatch(files[7], /No push|without pushing/);
-  assert.match(files[7], /without repeat confirmation/);
-  assert.match(files[7], /Prefer merge for published PR branches/);
-  assert.match(files[7], /Push commits and integration/);
-  assert.match(files[7], /No new history rewrite or force-push without explicit authorization/);
-  assert.match(files[7], /Never bypass\/weaken checks/);
+  assert.match(files[5], /python3 -m unittest/);
+  assert.match(files[6], /still push pending commits/);
+  assert.match(files[6], /configured upstream using an explicit remote\/refspec/);
+  assert.match(files[6], /never automatically pull\/rebase after rejection/);
+  assert.doesNotMatch(files[6], /No push|without pushing/);
+  assert.match(files[6], /without repeat confirmation/);
+  assert.match(files[6], /Prefer merge for published PR branches/);
+  assert.match(files[6], /Push commits and integration/);
+  assert.match(files[6], /No new history rewrite or force-push without explicit authorization/);
+  assert.match(files[6], /Never bypass\/weaken checks/);
 });

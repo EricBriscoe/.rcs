@@ -57,9 +57,11 @@ if ! "$skip_install"; then
   npm install -g --ignore-scripts \
     "@earendil-works/pi-coding-agent@$pi_version" \
     "@playwright/cli@$playwright_version"
+  if ! command -v qmd >/dev/null 2>&1; then
+    npm install -g @tobilu/qmd
+  fi
   PLAYWRIGHT_SKIP_BROWSER_GC=1 playwright-cli install-browser chromium
   node "$REPO/pi/install-rtk.mjs"
-  node "$REPO/pi/install-memory-embedding.mjs"
   npm ci --ignore-scripts --omit=dev --prefix "$REPO/pi/extensions/codex-account-pool"
 fi
 
@@ -94,9 +96,8 @@ link_resource "$REPO/pi/models.json" "$pi_agent_dir/models.json" models
 link_resource "$REPO/pi/AGENTS.md" "$pi_agent_dir/AGENTS.md" instructions
 link_resource "$REPO/pi/SUBAGENTS.md" "$pi_agent_dir/SUBAGENTS.md" instructions
 link_resource "$REPO/pi/subagents.json" "$pi_agent_dir/extensions/subagent/config.json" subagent-config
-# Keep sibling names identical to the checkout: Pi's TypeScript loader resolves
-# ../memory imports relative to the symlink path, not its canonical target.
-for extension in web ask-user monitor memory project-context code-navigation efficiency codex-account-pool appearance model-briefing; do
+# Keep sibling names identical to the checkout for relative extension imports.
+for extension in web ask-user monitor project-context code-navigation efficiency codex-account-pool appearance model-briefing; do
   source="$REPO/pi/extensions/$extension"
   link_resource "$source" "$pi_agent_dir/extensions/$extension" extension
   # Retire only our old prefixed link; preserve user-owned replacements.
@@ -105,11 +106,13 @@ for extension in web ask-user monitor memory project-context code-navigation eff
     rm "$previous"
   fi
 done
-# Remove only recognized links to the retired runtime. Keep historical task data.
-for previous in "$pi_agent_dir/extensions/orchestrate" "$pi_agent_dir/extensions/rcs-orchestrate"; do
-  if [[ -L "$previous" && "$(readlink "$previous")" == "$REPO/pi/extensions/orchestrate" ]]; then
-    rm "$previous"
-  fi
+# Retire only our links, never user replacements or runtime data.
+for extension in orchestrate memory; do
+  for previous in "$pi_agent_dir/extensions/$extension" "$pi_agent_dir/extensions/rcs-$extension"; do
+    if [[ -L "$previous" && "$(readlink "$previous")" == "$REPO/pi/extensions/$extension" ]]; then
+      rm "$previous"
+    fi
+  done
 done
 # Link owned themes individually so unrelated user themes remain discoverable.
 for theme in quiet-graphite paper; do
@@ -139,6 +142,6 @@ printf 'Pi settings linked to %s/pi/settings.json\n' "$REPO"
 printf 'Pi web tools linked to %s/pi/extensions/web\n' "$REPO"
 printf 'Pi owned extensions and Quiet Graphite/Paper themes linked from %s/pi/\n' "$REPO"
 printf 'Pi-native launcher linked to %s/bin/pi\n' "$pi_agent_dir"
-printf 'Pi checks latest stable dependencies on every launch; PI_AUTO_UPDATE=0 bypasses updates.\n'
+printf 'Pi pulls clean .rcs main/master and checks dependencies on every launch; PI_AUTO_UPDATE=0 bypasses updates.\n'
 printf 'RTK linked to %s/.local/bin/rtk; both commands use the same installed release. Restart Pi after setup.\n' "$HOME"
 printf 'Run pi in a project. On a new Mac, use /login openai-codex to sign in.\n'
