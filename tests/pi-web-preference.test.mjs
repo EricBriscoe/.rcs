@@ -35,7 +35,7 @@ test('fallback tools carry Chrome preference without disabling isolated browsing
   assert.match(policy, /chrome_screenshot.*explicit path outside Git/);
   assert.match(tools.get('web_search').definition.description, /preferred available browser/);
   const settings = JSON.parse(await readFile(join(root, 'pi/settings.json'), 'utf8'));
-  assert.ok(settings.packages.includes('npm:pi-chrome@0.15.49'));
+  assert.ok(settings.packages.includes('npm:pi-chrome'));
 });
 
 test('installed stock Chrome package requires approval and preserves fallback tools on revoke', {
@@ -49,7 +49,7 @@ test('installed stock Chrome package requires approval and preserves fallback to
   assert.deepEqual(loaded.errors, []);
   assert.ok(chrome, 'stock /chrome command loads');
   const pkg = JSON.parse(await readFile(join(chromeRoot, 'package.json'), 'utf8'));
-  assert.equal(pkg.version, '0.15.49');
+  assert.equal(pkg.name, 'pi-chrome');
   let active = ['web_search', 'web_browse'];
   let approved = false;
   const messages = [];

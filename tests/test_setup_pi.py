@@ -352,11 +352,15 @@ class PiSetupTests(unittest.TestCase):
             str(REPO / "pi/extensions/codex-account-pool"),
             "pi", "install", self.env["PI_SETUP_SUBAGENT_PIN"],
             "npm_config_ignore_scripts=true",
-            "pi", "install", "npm:pi-mcp-adapter@2.32.1",
+            "pi", "install", "npm:pi-mcp-adapter",
             "npm_config_ignore_scripts=true",
-            "pi", "install", "npm:pi-vim@0.14.2",
+            "pi", "install", "npm:pi-vim",
             "npm_config_ignore_scripts=true",
-            "pi", "install", "npm:pi-chrome@0.15.49",
+            "pi", "install", "npm:pi-chrome",
+            "npm_config_ignore_scripts=true",
+            "pi", "install", "npm:bigpowers",
+            "npm_config_ignore_scripts=true",
+            "pi", "install", "npm:pi-context-view",
             "npm_config_ignore_scripts=true",
             "pi", "install", "npm:pi-memory@0.4.2",
             "npm_config_ignore_scripts=true",
@@ -389,7 +393,7 @@ class PiSetupTests(unittest.TestCase):
         self.assertIn("@playwright/cli@" + (REPO / "pi/playwright-version").read_text().strip(), log)
         self.assertNotIn("update-deps", log)
         self.assertIn("@tobilu/qmd", log)
-        self.assertIn("npm:pi-mcp-adapter@2.32.1", log)
+        self.assertIn("npm:pi-mcp-adapter", log)
 
     def test_skip_install_never_downloads_packages(self):
         self.stub_install_commands()

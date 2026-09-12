@@ -24,15 +24,17 @@ On each Mac, `/login openai-codex` uses your subscription; credentials stay loca
 
 Vim prompt editing is enabled: `Esc` enters Normal mode; `i` returns to Insert. Motions, text objects, visual mode, `u` undo, and `Ctrl+r` redo work. In Normal mode, `:codex-pool` opens account settings.
 
-The Pi launcher pulls `.rcs` before dependency updates; [safeguards](pi/skills/pi-maintenance/SKILL.md). Repair: `PI_AUTO_UPDATE=0 pi --no-extensions`. Trusted workspace context includes `.pi/AGENTS.md`.
+The Pi launcher pulls `.rcs` before updating dependencies and unpinned npm packages; [safeguards](pi/skills/pi-maintenance/SKILL.md). Repair: `PI_AUTO_UPDATE=0 pi --no-extensions`. Trusted workspace context includes `.pi/AGENTS.md`.
 
 | Feature | Usage / reference |
 |---|---|
 | Appearance | Quiet Graphite + compact footer; Paper alternative in `/settings`. `/appearance compact\|stock`. [Guide](pi/extensions/appearance/README.md) |
 | File/code search | Native search plus read-only LSP/ast-grep. `/code-nav [reassess]`. [Guide](pi/extensions/code-navigation/README.md) |
 | Quiet output / RTK | Filtered output; raw artifacts retained. `/output raw\|auto`, `/tokens [all]`. [Guide](pi/extensions/efficiency/README.md) |
+| Context inspector | `/context usage` and `/context injections` inspect prompt/tool overhead without adding model tools. [Upstream](https://github.com/dimk90/pi-context-view) |
 | Memory | Stock [pi-memory](https://github.com/jayzeng/pi-memory): daily logs, long-term notes and scratchpad in `~/.pi/agent/memory/`. `memory_status` reports health; setup installs `qmd` via npm if missing from PATH. Restart Pi to auto-create the search collection. |
 | Subagents | Stock delegation, workflows, fleet, and worktrees. `/subagents-guide`, `/subagents-fleet`, `/subagents-models`. [Setup](pi/SUBAGENTS.md) |
+| Bigpowers | Skills/prompts only; hooks disabled. `/skill:using-bigpowers`. Project provisioning (`bigpowers init`) is opt-in. |
 | Questions | `ask_user`: choices or text; Escape/blank/unavailable UI is not approval. Interactive/RPC only. |
 | Background commands | `monitor` start requires `notifyOn: "output"` (live events) or `"completion"` (one final result). Session-owned; bounded output, manual read/stop available. |
 | Commit + push | `/skill:schlep`: stage all non-ignored changes, commit, and push to the upstream. [Skill](pi/skills/schlep/SKILL.md) |

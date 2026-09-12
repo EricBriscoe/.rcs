@@ -3,7 +3,7 @@ import { rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { realpathSync } from "node:fs";
 import { effectiveRtk } from "./runtime.mjs";
-import { filterFor, quietTests, runFilter, saveRaw, originalOutput, sessionKey } from "./output.ts";
+import { filterFor, groupedGrep, quietTests, runFilter, saveRaw, originalOutput, sessionKey } from "./output.ts";
 import { privateDirectory, recordUsage, recordOutput, usageReport, formatReport } from "./usage.ts";
 
 export default function (pi: ExtensionAPI) {
@@ -18,28 +18,40 @@ export default function (pi: ExtensionAPI) {
       privateDirectory(join(agent, "efficiency"));
       const original = await originalOutput(event);
       if (!original || original.raw.length < 500) return;
-      const command = event.input.command;
-      let compact = quietTests(command, original.raw);
-      if (compact) filter = "passing-tests";
-      else {
-        const chosen = filterFor(command, original.raw);
-        if (!chosen) return;
-        if (!binary) {
-          const source = dirname(realpathSync(join(agent, "settings.json")));
-          const pins = effectiveRtk(dirname(source), agent);
-          if (!/^\d+\.\d+\.\d+$/.test(pins.version)) return;
-          binary = join(agent, "tooling", "rtk", pins.version, "rtk");
+      let compact: string | undefined;
+      if (event.toolName === "grep") {
+        if (event.input.context || event.details?.matchLimitReached || event.details?.linesTruncated || event.details?.truncation?.truncated) return;
+        compact = groupedGrep(original.raw);
+        filter = "grouped-grep";
+      } else {
+        const command = event.input.command;
+        compact = quietTests(command, original.raw);
+        if (compact) filter = "passing-tests";
+        else {
+          const chosen = filterFor(command, original.raw);
+          if (!chosen) return;
+          if (chosen === "grep") {
+            compact = groupedGrep(original.raw);
+            filter = "grouped-grep";
+          } else {
+            if (!binary) {
+              const source = dirname(realpathSync(join(agent, "settings.json")));
+              const pins = effectiveRtk(dirname(source), agent);
+              if (!/^\d+\.\d+\.\d+$/.test(pins.version)) return;
+              binary = join(agent, "tooling", "rtk", pins.version, "rtk");
+            }
+            compact = await runFilter(binary, chosen, original.raw, join(agent, "efficiency", "rtk-home"), abort.signal);
+            filter = `rtk:${chosen}`;
+          }
         }
-        compact = await runFilter(binary, chosen, original.raw, join(agent, "efficiency", "rtk-home"), abort.signal);
-        filter = `rtk:${chosen}`;
       }
       // Include recovery metadata in the savings comparison, not just the compressed body.
-      if (!compact.trim() || Buffer.byteLength(compact) + 300 >= Buffer.byteLength(before)) { filter = "raw"; return; }
+      if (!compact?.trim() || Buffer.byteLength(compact) + 300 >= Buffer.byteLength(before)) { filter = "raw"; return; }
       abort.signal.throwIfAborted();
       const directory = join(agent, "efficiency", "output", sessionKey(owner(ctx)));
       privateDirectory(join(agent, "efficiency", "output"));
       const path = await saveRaw(directory, original.raw);
-      shown = `${compact.trim()}\n[Reduced: ${filter}. Raw output: ${path}]`;
+      shown = `${compact}\n[Reduced: ${filter}. Raw output: ${path}]`;
       if (Buffer.byteLength(shown) >= Buffer.byteLength(before) || abort.signal.aborted) { await rm(path).catch(() => {}); shown = before; filter = "raw"; return; }
       return { content: [{ type: "text", text: shown }], details: { ...event.details, fullOutputPath: path, reduction: filter } };
     } catch { shown = before; filter = "raw"; } // Never rerun the original command.
@@ -47,7 +59,7 @@ export default function (pi: ExtensionAPI) {
   }
   pi.on("session_start", () => { enabled = process.env.RTK_DISABLED !== "1"; });
   pi.on("tool_result", (event, ctx) => {
-    if (event.toolName !== "bash") return;
+    if (event.toolName !== "bash" && event.toolName !== "grep") return;
     const promise = reduce(event, ctx); pending.add(promise);
     void promise.finally(() => pending.delete(promise)).catch(() => {});
     return promise;
@@ -68,12 +80,12 @@ export default function (pi: ExtensionAPI) {
     },
   });
   pi.registerCommand("output", {
-    description: "Command output mode: /output auto or /output raw (this session)",
+    description: "Bash/search output mode: /output auto or /output raw (this session)",
     handler: async (args, ctx) => {
       if (args.trim() === "auto") enabled = true;
       else if (args.trim() === "raw") enabled = false;
       else if (args.trim()) { ctx.ui.notify("Use /output [auto|raw]", "warning"); return; }
-      ctx.ui.notify(`Command output: ${enabled ? "auto (RTK/quiet tests, raw fallback)" : "raw"}.`, "info");
+      ctx.ui.notify(`Bash/search output: ${enabled ? "auto (RTK/quiet tests/grouped grep, raw fallback)" : "raw"}.`, "info");
     },
   });
   pi.on("session_shutdown", async () => { abort.abort(); await Promise.allSettled([...pending]); });

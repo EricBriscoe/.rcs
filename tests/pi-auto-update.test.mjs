@@ -20,7 +20,7 @@ async function fixture(t) {
   await put(join(checkout, 'pi/settings.json'), { packages: ['npm:pi-subagents'] });
   await put(join(checkout, 'pi/code-navigation.json'), baseline);
   await put(join(checkout, 'pi/rtk.json'), { version: '1.0.0', assets: {} });
-  const manifest = name => name === 'pi-subagents' ? join(agent, 'npm/node_modules', name, 'package.json') : name === 'proper-lockfile' ? join(checkout, 'pi/extensions/codex-account-pool/node_modules', name, 'package.json') : join(global, name, 'package.json');
+  const manifest = name => [CORE, WEB].includes(name) ? join(global, name, 'package.json') : name === 'proper-lockfile' ? join(checkout, 'pi/extensions/codex-account-pool/node_modules', name, 'package.json') : join(agent, 'npm/node_modules', name, 'package.json');
   for (const name of [CORE, WEB, 'pi-subagents', 'proper-lockfile']) await put(manifest(name), { name, version: '1.0.0' });
   const calls = [], logs = []; let metadata = 0;
   const options = { agent, checkoutUpdate: async () => {}, npmLatest: async () => { metadata++; return '2.0.0'; }, rtkLatest: async () => ({ version: '2.0.0', assets: {} }),
@@ -32,7 +32,10 @@ async function fixture(t) {
         const spec = args.at(-1), at = spec.lastIndexOf('@');
         await put(manifest(spec.slice(0, at)), { name: spec.slice(0, at), version: spec.slice(at + 1) });
       }
-      if (cmd === process.execPath && args[1] === 'update') await put(manifest('pi-subagents'), { name: 'pi-subagents', version: '2.0.0' });
+      if (cmd === process.execPath && args[1] === 'update') {
+        const name = args[2].slice(4);
+        await put(manifest(name), { name, version: '2.0.0' });
+      }
       return { stdout: '' };
     },
   };
@@ -111,6 +114,67 @@ test('checkout sync runs under the lock before reading dependency definitions; f
   assert.ok(failed.warnings.includes('.rcs'));
   assert.equal(failed.npm[CORE], '2.0.0');
   assert.doesNotMatch(f.logs.join('\n'), /PRIVATE_GIT_REMOTE/);
+});
+
+test('Bigpowers updates filtered packages without changing filters, retries failures and skips current versions', async t => {
+  const f = await fixture(t);
+  const settings = { packages: ['npm:pi-subagents', { source: 'npm:bigpowers', extensions: [], themes: [] }] };
+  await f.put(join(f.checkout, 'pi/settings.json'), settings);
+  let attempts = 0;
+  const options = { ...f.options, run: async (cmd, args, opts) => {
+    if (cmd === process.execPath && args[2] === 'npm:bigpowers' && ++attempts === 1) throw Error('PRIVATE_PACKAGE_FAILURE');
+    return f.options.run(cmd, args, opts);
+  } };
+  assert.ok((await updateDependencies(f.checkout, options)).warnings.includes('bigpowers'));
+  assert.ok(!f.logs.join('\n').includes('PRIVATE_PACKAGE_FAILURE'));
+  const state = await updateDependencies(f.checkout, options);
+  assert.equal(attempts, 2);
+  assert.equal(state.npm.bigpowers, '2.0.0');
+  assert.deepEqual(state.warnings, []);
+  await updateDependencies(f.checkout, options);
+  assert.equal(attempts, 2, 'current version needs no reinstall');
+  assert.deepEqual(JSON.parse(await readFile(join(f.checkout, 'pi/settings.json'), 'utf8')), settings);
+  for (const [cmd, versions] of f.calls) if (cmd === 'navigation') assert.equal(versions.bigpowers, undefined);
+});
+
+test('all configured unpinned npm packages update, including scoped and filtered entries', async t => {
+  const f = await fixture(t);
+  const names = ['pi-mcp-adapter', 'pi-vim', 'pi-chrome', '@example/skills'];
+  await f.put(join(f.checkout, 'pi/settings.json'), { packages: [
+    ...names.map(name => `npm:${name}`), { source: 'npm:@example/skills', extensions: [] },
+    'npm:pinned@1.0.0', 'npm:@example/pinned@1.0.0', 'git:github.com/example/skills@v1', './local',
+  ] });
+  const queried = [];
+  const state = await updateDependencies(f.checkout, { ...f.options, npmLatest: async name => { queried.push(name); return '2.0.0'; } });
+  const updated = f.calls.filter(([cmd, args]) => cmd === process.execPath && args[1] === 'update').map(([, args]) => args[2]);
+  assert.deepEqual(updated, names.map(name => `npm:${name}`));
+  for (const name of names) {
+    assert.equal(queried.filter(value => value === name).length, 1);
+    assert.equal(state.npm[name], '2.0.0');
+  }
+  assert.ok(!queried.includes('pinned') && !queried.includes('@example/pinned'));
+  for (const [cmd, versions] of f.calls) if (cmd === 'navigation') {
+    for (const name of names) assert.equal(versions[name], undefined);
+  }
+});
+
+test('shipped package sources preserve the stock memory pin and Bigpowers resource filters', async () => {
+  const settings = JSON.parse(await readFile(new URL('../pi/settings.json', import.meta.url), 'utf8'));
+  const sources = settings.packages.map(entry => typeof entry === 'string' ? entry : entry.source);
+  assert.deepEqual(sources, ['npm:pi-subagents', 'npm:pi-mcp-adapter', 'npm:pi-vim', 'npm:pi-chrome', 'npm:bigpowers', 'npm:pi-context-view', 'npm:pi-memory@0.4.2']);
+  assert.deepEqual(settings.packages.find(entry => entry.source === 'npm:bigpowers'), { source: 'npm:bigpowers', extensions: [], themes: [] });
+});
+
+test('absent and pinned Bigpowers are not queried or updated', async t => {
+  const f = await fixture(t);
+  for (const entry of [null, 'npm:bigpowers@2.88.2', { source: 'npm:bigpowers@2.88.2', extensions: [] }]) {
+    await f.put(join(f.checkout, 'pi/settings.json'), { packages: entry ? [entry] : [] });
+    const queried = [];
+    await updateDependencies(f.checkout, { ...f.options, npmLatest: async name => { queried.push(name); return '2.0.0'; } });
+    assert.ok(!queried.includes('bigpowers'));
+    assert.ok(!queried.includes('pi-subagents'));
+  }
+  assert.ok(!f.calls.some(([cmd, args]) => cmd === process.execPath && args[1] === 'update'));
 });
 
 test('offline metadata keeps installed selections, failures retry and errors never expose provider output', async t => {

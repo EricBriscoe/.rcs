@@ -6,7 +6,7 @@ import { join, dirname } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { commandWords, filterFor, quietTests, runFilter, saveRaw, originalOutput, MAX_FILTER_BYTES } from '../pi/extensions/efficiency/output.ts';
+import { commandWords, filterFor, groupedGrep, quietTests, runFilter, saveRaw, originalOutput, MAX_FILTER_BYTES } from '../pi/extensions/efficiency/output.ts';
 import { recordUsage, recordOutput, usageReport, formatReport } from '../pi/extensions/efficiency/usage.ts';
 import { installRtk } from '../pi/install-rtk.mjs';
 import { nativeEnvironment } from '../pi/native-resources.mjs';
@@ -27,6 +27,28 @@ test('classification is conservative and never reconstructs executed commands', 
   assert.equal(filterFor('rg -n match src', 'not a line match'), undefined);
   assert.equal(filterFor('cargo test', 'test result: ok. 12 passed'), 'cargo-test');
   assert.equal(filterFor('pytest', '===== 12 passed in 1.0s ====='), 'pytest');
+});
+
+test('grouped search results round-trip every match in order, including whitespace and Unicode', () => {
+  const files = ['src/long-component-name/雪 \\"file\\".ts', 'src/long-component-name/another-file.ts'];
+  for (let seed = 0; seed < 30; seed++) {
+    const lines = Array.from({ length: 100 }, (_, i) => `${files[Math.floor((i + seed) / 13) % 2]}:${i + 1}: \tvalue:${i % 7} [${seed}]  `);
+    const grouped = groupedGrep(lines.join('\n'));
+    assert.ok(grouped);
+    let file;
+    const restored = [];
+    for (const line of grouped.split('\n').slice(1)) {
+      if (line.startsWith('"')) file = JSON.parse(line.slice(0, -1));
+      else restored.push(`${file}:${line}`);
+    }
+    assert.deepEqual(restored, lines, 'all paths, line numbers, source text and ordering survive');
+  }
+  const colonPath = Array.from({ length: 40 }, (_, i) => `long-directory/component:123:file.ts:${i + 1}: match`).join('\n');
+  assert.equal(groupedGrep(colonPath), undefined, 'colon filenames must not acquire incorrect file/line labels');
+  assert.equal(groupedGrep(Array.from({ length: 40 }, () => 'long-directory/component:123:7: match').join('\n')), undefined, 'overlapping numeric delimiters are ambiguous too');
+  for (const text of ['', 'one.ts:1: x', 'file-1- context', 'file:1: x\n\n[truncated]', 'file:1: \x1b[31mcolored', 'file:1: x\r\n', 'binary\0output', 'file:no-number: x']) {
+    assert.equal(groupedGrep(text), undefined, text);
+  }
 });
 
 test('quiet passing tests retain summaries, skips and diagnostics; failures/opt-outs stay raw', () => {
