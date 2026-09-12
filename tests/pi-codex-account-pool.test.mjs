@@ -316,107 +316,19 @@ test("installed menu activates a model in the current session and confirms login
   assert.equal(state.accounts.length, 1, "declining confirmation preserves the saved login");
 });
 
-for (const deferBeforeFetch of [false, true]) {
-  test(`public registry completion pins background account and ${deferBeforeFetch ? "rechecks admission before fetch" : "never fails over a submitted quota response"}`, { timeout: 30000 }, async t => {
-    const { root, path } = await fixture(t);
-    const agent = join(root, "agent"), cwd = join(root, "project"), output = join(root, "background.json"), probe = join(root, "background.ts");
-    const jwt = Buffer.from(JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "fixture" } })).toString("base64url");
-    await mkdir(cwd, { recursive: true }); await mkdir(agent, { recursive: true }); await writeFile(join(agent, "settings.json"), "{}");
-    await updatePoolState(state => {
-      state.enabled = true;
-      state.accounts = ["first", "second"].map(id => ({ ...account(id), access: `x.${jwt}.x` }));
-    }, path);
-    await writeFile(probe, `import {writeFileSync} from 'node:fs'; export default function(pi){pi.registerCommand('background',{handler:async(_args,ctx)=>{
-      const request={};pi.events.emit('rcs-memory:pool',request);
-      let checks=0,calls=0,payloads=0;
-      const registration=request.service.register('synthetic-memory','first',async()=>({allowed:!${deferBeforeFetch} || ++checks<3,mode:'quota',reason:'working'}));
-      const model=ctx.modelRegistry.getProvider('openai-codex').getModels()[0];
-      const result=await ctx.modelRegistry.complete(model,{messages:[]},{sessionId:'synthetic-memory',cacheRetention:'none',maxRetries:0,onPayload:()=>{payloads++},fetch:async()=>{calls++;return new Response(JSON.stringify({error:{code:'usage_limit_reached'}}),{status:429,headers:{'retry-after':'60'}})}});
-      writeFileSync(${JSON.stringify(output)},JSON.stringify({calls,payloads,deferred:!!registration.entry.deferred,submitted:registration.entry.submitted,provider:result.provider,model:result.model===model.id}));registration.release();
-    }})}`);
-    const run = exec(process.execPath, [cli, "--offline", "--no-session", "--no-context-files", "--approve", "-e", join(checkout, "pi/extensions/codex-account-pool"), "-e", probe, "-p", "/background"], { cwd, env: { ...process.env, HOME: root, PI_CODING_AGENT_DIR: agent }, timeout: 25000 });
-    run.child.stdin.end();
-    const { stdout, stderr } = await run;
-    assert.doesNotMatch(stdout + stderr, /Failed to load extension|Cannot find module/);
-    assert.deepEqual(JSON.parse(await readFile(output, "utf8")), { calls: deferBeforeFetch ? 0 : 1, payloads: 1, deferred: true, submitted: !deferBeforeFetch, provider: "openai-codex", model: true });
-    assert.equal((await readPoolState(path)).accounts[1].exhausted, undefined);
-    assert.equal((await readPoolState(path)).backgroundHoldAccountId, deferBeforeFetch ? undefined : "first");
-  });
-}
-
-test("explicit priority change releases a background hold without any model request", { timeout: 30000 }, async t => {
+test("passive secondary-only named-family headers preserve omitted primary freshness", { timeout: 30000 }, async t => {
   const { root, path } = await fixture(t);
-  const agent = join(root, "agent"), cwd = join(root, "project");
-  await mkdir(cwd, { recursive: true }); await mkdir(agent, { recursive: true });
-  await writeFile(join(agent, "settings.json"), "{}");
-  await updatePoolState(state => { state.enabled = true; state.accounts = [account("a"), account("b")]; state.backgroundHoldAccountId = "a"; }, path);
-  const run = exec(process.execPath, [cli, "--offline", "--no-session", "--no-context-files", "--approve", "-e", join(checkout, "pi/extensions/codex-account-pool"), "-p", "/codex-pool priority b 1"], { cwd, env: { ...process.env, HOME: root, PI_CODING_AGENT_DIR: agent }, timeout: 25000 });
-  run.child.stdin.end(); await run;
-  const state = await readPoolState(path);
-  assert.equal(state.accounts[0].accountId, "b");
-  assert.equal(state.backgroundHoldAccountId, undefined);
-});
-
-test("passive secondary-only named-family headers deny background admission without rejuvenating omitted primary", { timeout: 30000 }, async t => {
-  const { root, path } = await fixture(t);
-  const agent = join(root, "agent"), cwd = join(root, "project"), output = join(root, "secondary.json"), probe = join(root, "secondary.ts");
+  const agent = join(root, "agent"), cwd = join(root, "project"), probe = join(root, "secondary.ts");
   const jwt = Buffer.from(JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "fixture" } })).toString("base64url");
   await mkdir(cwd, { recursive: true }); await mkdir(agent, { recursive: true }); await writeFile(join(agent, "settings.json"), "{}");
   const before = Date.now() - 10000;
   await updatePoolState(state => { state.enabled = true; state.accounts = [{ ...account("a"), access: `x.${jwt}.x`, quota: { fetchedAt: before, windows: [{ limitId: "codex_bengalfox", primary: { usedPercent: 10 }, secondary: { usedPercent: 10 } }] } }]; }, path);
-  await writeFile(probe, `import {writeFileSync} from 'node:fs'; export default function(pi){pi.registerCommand('secondary',{handler:async(_args,ctx)=>{
+  await writeFile(probe, `export default function(pi){pi.registerCommand('secondary',{handler:async(_args,ctx)=>{
     const model=ctx.modelRegistry.getProvider('openai-codex').getModels()[0];
     await ctx.modelRegistry.complete(model,{messages:[]},{fetch:async()=>new Response(JSON.stringify({error:{code:'rate_limit_exceeded'}}),{status:429,headers:{'x-codex-bengalfox-secondary-used-percent':'99'}})});
-    const request={};pi.events.emit('rcs-memory:pool',request);
-    const admission=await request.service.prepare({pause:30,resume:40},new AbortController().signal,()=>true,'a',false);
-    writeFileSync(${JSON.stringify(output)},JSON.stringify(admission));
   }})}`);
   const run = exec(process.execPath, [cli, "--offline", "--no-session", "--no-context-files", "--approve", "-e", join(checkout, "pi/extensions/codex-account-pool"), "-e", probe, "-p", "/secondary"], { cwd, env: { ...process.env, HOME: root, PI_CODING_AGENT_DIR: agent }, timeout: 25000 });
   run.child.stdin.end(); await run;
-  assert.equal(JSON.parse(await readFile(output, "utf8")).allowed, false);
   const limit = (await readPoolState(path)).accounts[0].quota.windows[0];
   assert.equal(limit.primary.usedPercent, 10); assert.equal(limit.secondary.usedPercent, 99); assert.equal(limit.fetchedAt, before);
-});
-
-test("confirmed background quota on third attempt survives cancellation during delayed exhaustion persistence exactly once", { timeout: 30000 }, async t => {
-  const { root, path } = await fixture(t);
-  const agent = join(root, "agent"), cwd = join(root, "project"), output = join(root, "quota-cancel.json"), probe = join(root, "quota-cancel.ts");
-  const jwt = Buffer.from(JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "fixture" } })).toString("base64url");
-  await mkdir(cwd, { recursive: true }); await mkdir(agent, { recursive: true }); await writeFile(join(agent, "settings.json"), "{}");
-  await updatePoolState(state => { state.enabled = true; state.accounts = ["a", "b"].map(id => ({ ...account(id), access: `x.${jwt}.x` })); }, path);
-  await writeFile(probe, `import {writeFileSync,mkdirSync,rmSync} from 'node:fs';
-    import {MemoryStore} from ${JSON.stringify(join(checkout, "pi/extensions/memory/store.ts"))};
-    import {Learner} from ${JSON.stringify(join(checkout, "pi/extensions/memory/learner.ts"))};
-    import {BackgroundDeferred} from ${JSON.stringify(join(checkout, "pi/extensions/memory/budget.ts"))};
-    export default function(pi){pi.registerCommand('quota-cancel',{handler:async(_args,ctx)=>{
-      const store=new MemoryStore(${JSON.stringify(join(root, "memory/memory.sqlite"))});
-      store.enqueue('A',{session:'s',entries:[{id:'u',role:'user',text:'Use pnpm.'}]});
-      for(let i=0;i<2;i++)store.fail(store.claim('A'),true);
-      const request={};pi.events.emit('rcs-memory:pool',request);
-      const model=ctx.modelRegistry.getProvider('openai-codex').getModels()[0];
-      let calls=0,notifications=0,completion;
-      const learner=new Learner(store,'A',async(_system,_input,signal,_admission,onDeferred)=>{
-        const registration=request.service.register('quota-cancel','a',async()=>({allowed:true,mode:'quota',accountId:'a'}),(admission,submitted)=>{
-          notifications++;const error=new BackgroundDeferred(admission);error.submitted=submitted;onDeferred(error);
-          mkdirSync(${JSON.stringify(path + ".lock")});learner.pause();
-        });
-        completion=ctx.modelRegistry.complete(model,{messages:[]},{signal,sessionId:'quota-cancel',fetch:async()=>{calls++;return new Response(JSON.stringify({error:{code:'usage_limit_reached'}}),{status:429,headers:{'retry-after':'120'}})}}).finally(()=>registration.release());
-        await completion;throw new Error('completion must not save');
-      },()=>true,()=>{},async()=>({allowed:true,mode:'quota',accountId:'a'}));
-      await learner.run();await learner.close();
-      const during=store.db.prepare('SELECT state,attempts,payload,ready_at FROM jobs').get();
-      rmSync(${JSON.stringify(path + ".lock")},{recursive:true});
-      await completion;
-      const after=store.db.prepare('SELECT state,attempts,payload,ready_at FROM jobs').get();
-      writeFileSync(${JSON.stringify(output)},JSON.stringify({during,after,calls,notifications,used:store.dailyBudget().used}));store.close();
-    }})}`);
-  const run = exec(process.execPath, [cli, "--offline", "--no-session", "--no-context-files", "--approve", "-e", join(checkout, "pi/extensions/codex-account-pool"), "-e", probe, "-p", "/quota-cancel"], { cwd, env: { ...process.env, HOME: root, PI_CODING_AGENT_DIR: agent }, timeout: 25000 });
-  run.child.stdin.end(); await run;
-  const result = JSON.parse(await readFile(output, "utf8"));
-  assert.equal(result.during.state, "pending"); assert.equal(result.during.attempts, 2);
-  assert.ok(JSON.parse(result.during.payload).entries.length); assert.ok(result.during.ready_at > Date.now() + 60000);
-  assert.deepEqual(result.after, result.during);
-  assert.equal(result.calls, 1); assert.equal(result.notifications, 1); assert.equal(result.used, 3);
-  const state = await readPoolState(path);
-  assert.equal(state.backgroundHoldAccountId, "a"); assert.equal(state.accounts[1].exhausted, undefined);
 });

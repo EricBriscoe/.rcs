@@ -1,4 +1,4 @@
-export { quotaResetAt, isQuotaExhaustion, shouldFailover } from "../memory/codex-quota.mjs";
+export { quotaResetAt, isQuotaExhaustion, shouldFailover } from "./codex-quota.mjs";
 import { chmod, mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -155,13 +155,12 @@ export function isModelAccessError(message) {
   return /\bmodel\b.*\b(not found|not available|not supported|access denied|permission)|\b(access denied|permission denied)\b.*\bmodel\b/i.test(message);
 }
 
-export async function markExhausted(accountId, resetAt, path = poolStatePath(), background = false, observedAt = Date.now()) {
+export async function markExhausted(accountId, resetAt, path = poolStatePath(), observedAt = Date.now()) {
   await updatePoolState(state => {
     const account = state.accounts.find(candidate => candidate.accountId === accountId);
     if (!account) return;
     account.exhausted = true;
     account.exhaustedAt = observedAt;
-    if (background) { state.backgroundHoldAccountId = accountId; account.memoryReserve = true; }
     if (resetAt !== undefined) account.resetAt = resetAt;
     else delete account.resetAt;
   }, path);
@@ -237,13 +236,4 @@ export async function loginAndAdd(label, login, path = poolStatePath()) {
 export async function loginAndReplace(label, login, path = poolStatePath()) {
   const credential = await login();
   await replaceAccountCredentials(label, credential, path);
-}
-
-/** Only observed foreground routing, not speculative preflight, releases a background hold. */
-export async function noteForegroundAccount(accountId, path = poolStatePath()) {
-  const before = await readPoolState(path);
-  if (!before.backgroundHoldAccountId || before.backgroundHoldAccountId === accountId) return;
-  await updatePoolState(state => {
-    if (state.backgroundHoldAccountId !== accountId) delete state.backgroundHoldAccountId;
-  }, path);
 }

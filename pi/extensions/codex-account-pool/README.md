@@ -16,4 +16,4 @@ Re-login preserves the account’s label, priority, enablement, cooldown, and qu
 
 Failover occurs only before a stream starts and only for an original structured Codex 429 quota response. It never retries partial output, tool calls, network errors, authentication failures, throttling, or model-access failures. Pool requests use Codex SSE so the adapter can retain that structured pre-start evidence. A failover gets a fresh account-scoped session/cache namespace. Response provenance is persisted as a non-secret account hash; opaque reasoning/response metadata from another or unknown account is removed while preserving transcript and tool-result pairing. The installed public Codex API has no per-account model-discovery endpoint, so server acceptance of the selected normal model request is the conservative access validation.
 
-[Memory](../memory/README.md) pins background requests via the public event bus/session ID. Passive official headers retain omitted quota windows.
+Passive official headers retain omitted quota windows.

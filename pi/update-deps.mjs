@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { readFile, writeFile, mkdir, lstat, rename, rm, readdir, chmod } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, lstat, rename, rm, readdir, chmod, realpath } from 'node:fs/promises';
 import { join, dirname, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -54,6 +54,33 @@ async function command(command, args, options = {}) {
   return exec(command, args, { timeout: 180000, maxBuffer: 1024 * 1024, ...options, env: {
     ...process.env, ...options.env, PI_AUTO_UPDATE_ACTIVE: '1', npm_config_ignore_scripts: 'true', npm_config_audit: 'false', npm_config_fund: 'false', npm_config_fetch_retries: '0', npm_config_fetch_timeout: '15000',
   } });
+}
+
+// Called under the update lock. Never stash, switch branches, or resolve conflicts.
+export async function updateCheckout(checkout, { run = command, log = message => console.error(message) } = {}) {
+  // A launch from another Git worktree must still update the harness checkout.
+  const env = Object.fromEntries(['GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_NAMESPACE'].map(key => [key, undefined]));
+  Object.assign(env, { GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never', SSH_ASKPASS_REQUIRE: 'never',
+    GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND || 'ssh -o BatchMode=yes -o ConnectTimeout=10' });
+  const git = async (...args) => (await run('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'submodule.recurse=false', ...args], { cwd: checkout, env, timeout: 30000 })).stdout.trim();
+  const skip = reason => { log(`[pi update] .rcs: skipped (${reason}); checkout left unchanged.`); return 'skipped'; };
+  if (await realpath(await git('rev-parse', '--show-toplevel')) !== await realpath(checkout)) return skip('not the checkout root');
+  const branch = await git('symbolic-ref', '--quiet', '--short', 'HEAD').catch(() => '');
+  if (!['main', 'master'].includes(branch)) return skip('not on main/master');
+  if (await git('status', '--porcelain=v1', '--untracked-files=all', '--ignore-submodules=none')) return skip('local changes');
+  const gitDir = await git('rev-parse', '--absolute-git-dir');
+  for (const marker of ['MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'rebase-merge', 'rebase-apply', 'sequencer', 'BISECT_START']) {
+    try { await lstat(join(gitDir, marker)); return skip('Git operation in progress'); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+  }
+  const upstream = await git('for-each-ref', '--format=%(upstream:remotename)%09%(upstream:remoteref)', `refs/heads/${branch}`);
+  const [remote, ref] = upstream.split('\t');
+  if (!remote || remote === '.' || ref !== `refs/heads/${branch}`) return skip('no matching remote upstream');
+  const before = await git('rev-parse', 'HEAD');
+  await git('pull', '--ff-only', '--no-rebase', '--no-autostash', '--no-recurse-submodules');
+  const after = await git('rev-parse', 'HEAD');
+  if (after !== before) log(`[pi update] .rcs → ${after.slice(0, 12)}`);
+  return after === before ? 'unchanged' : 'updated';
 }
 
 // The lock covers updates, not the Pi session. Dead owners are recoverable without
@@ -138,15 +165,17 @@ export async function updateNavigation(agent, baseline, versions, log = message 
   } finally { state.close(); }
 }
 
-export async function updateDependencies(checkout, { agent = agentDirectory(), npmLatest = latestNpm, rtkLatest = latestRtk, run = command, rtkInstall = installRtk, navigationInstall = updateNavigation, log = message => console.error(message), lock = updateLock } = {}) {
+export async function updateDependencies(checkout, { agent = agentDirectory(), npmLatest = latestNpm, rtkLatest = latestRtk, run = command, rtkInstall = installRtk, navigationInstall = updateNavigation, checkoutUpdate = updateCheckout, log = message => console.error(message), lock = updateLock } = {}) {
   const directory = join(agent, 'updates');
   return lock(directory, async () => {
     const previous = runtimeDependencies(agent), current = { ...previous, npm: { ...previous.npm } };
+    const latest = {}, warnings = [];
+    const warn = name => { warnings.push(name); log(`[pi update] ${name}: update unavailable/failed; continuing with installed dependencies. Use PI_AUTO_UPDATE=0 to bypass.`); };
+    try { await checkoutUpdate(checkout, { run, log }); }
+    catch { warn('.rcs'); }
     const baseline = JSON.parse(await readFile(join(checkout, 'pi/code-navigation.json'), 'utf8'));
     const ast = `@ast-grep/cli-${process.platform}-${process.arch}${process.platform === 'linux' ? '-gnu' : ''}`;
     const names = [...new Set([CORE, WEB, PACKAGE, LOCK, ast, ...Object.values(baseline.servers).flatMap(recipe => (recipe.packages || []).map(nameOf))])];
-    const latest = {}, warnings = [];
-    const warn = name => { warnings.push(name); log(`[pi update] ${name}: update unavailable/failed; continuing with installed dependencies. Use PI_AUTO_UPDATE=0 to bypass.`); };
     await Promise.all(names.map(async name => {
       try { const version = await npmLatest(name); if (!stableVersion(version)) throw Error('Invalid version'); latest[name] = version; }
       catch { warn(name); }

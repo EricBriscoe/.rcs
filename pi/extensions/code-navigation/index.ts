@@ -8,7 +8,7 @@ import { NavState, inventory, projectRoot, target, inside, digest, type ServerCo
 import { recipeCommand, astCommand, executable } from "./packages.ts";
 import { Navigation, bounded } from "./navigation.ts";
 import { structuralSearch } from "./ast.ts";
-import { redact } from "../memory/policy.ts";
+import { redact } from "./redact.ts";
 import { effectiveNavigation } from "../efficiency/runtime.mjs";
 
 export function searchTools(active: string[], args: string[]) {

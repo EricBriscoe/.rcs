@@ -34,7 +34,7 @@ eval "$brew_shellenv"
 
 say "Installing Homebrew packages"
 brew install \
-  fnm zoxide fzf \
+  fnm zoxide fzf starship \
   neovim ripgrep fd bat \
   git tmux node python
 

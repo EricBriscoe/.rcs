@@ -4,7 +4,7 @@ Default: `quiet-graphite`; alternative: `paper` in `/settings` → Theme. Theme 
 
 `/appearance stock|compact` switches footer/spinner for this session. Compact shows directory/branch, model/thinking, context and Codex pool status. Unknown, stale, reset and exhaustion information stays visible; long statuses wrap. Other extension statuses and stock subagent widgets are preserved without private APIs or extra polling.
 
-Details: `/session`, `/tokens`, `/memory`. Memory is quiet when healthy/idle; learning, pauses, failures and disabled controls remain visible. Defaults hide thinking (toggle in `/settings`) and cache/recovery diagnostics (`showCacheMissNotices` in `pi/settings.json`), quiet startup, condense changelogs and pad input. Errors, retries, approvals and failover notices are not intercepted.
+Details: `/session`, `/tokens`. Defaults hide thinking (toggle in `/settings`) and cache/recovery diagnostics (`showCacheMissNotices` in `pi/settings.json`), quiet startup, condense changelogs and pad input. Errors, retries, approvals and failover notices are not intercepted.
 
 ## Terminal pairing
 

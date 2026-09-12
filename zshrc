@@ -1,5 +1,5 @@
 export ZSH="$HOME/.oh-my-zsh"
-ZSH_THEME="robbyrussell"
+ZSH_THEME="" # Starship owns the prompt; keep oh-my-zsh's helpers/plugins.
 plugins=(git)
 
 source $ZSH/oh-my-zsh.sh
@@ -198,6 +198,11 @@ _codex_account() {
 }
 codex-work()     { _codex_account work "$@"; }
 codex-personal() { _codex_account personal "$@"; }
+
+# Installed by setup.sh, never during shell startup.
+if (( $+commands[starship] )); then
+  eval "$(starship init zsh)"
+fi
 
 # Machine-local / private config (e.g. work-specific functions, paths, secrets).
 # Not versioned; lives only on machines that need it. Sourced last so it can use

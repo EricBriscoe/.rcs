@@ -15,13 +15,13 @@ Resolve `${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/settings.json` to `<checkout>/p
 | `pi/skills/`, `pi/prompts/` | On-demand resources |
 | `setup-pi.sh`, `tests/`, `README.md` | Installation, regression tests, usage |
 
-Read installed API docs/examples before changing extension contracts. Preserve symlinks and sibling directory names. Keep `pi-subagents` unversioned; use stock discovery, updates and controls. Put details here or in extension READMEs, not global instructions.
+Read installed API docs/examples before changing extension contracts. Preserve symlinks and sibling names. Keep `pi-subagents` unversioned; use stock discovery, updates and controls. Put details here or in extension READMEs, not global instructions.
 
-Markdown budget: automatically trim redundancy, preserving safety rules, commands and limits. If useful content cannot reasonably fit, raise caps gradually. No confirmation needed; other check/commit rules still apply.
+Markdown: trim redundancy, preserving safety/commands/limits; raise caps gradually only if needed. No confirmation needed; check/commit rules still apply.
 
 Codex Astra: 416,384 context budget − 16,384 default reserve = ~400K compaction. Other models unchanged. Open `/model` or restart to reload overrides; provider limits apply.
 
-Each top-level launch checks latest stable Pi, pi-subagents, Playwright/Chromium, RTK, proper-lockfile and managed navigation tools. No CI/approval gate, npm scripts, Node/Homebrew upgrades or session restarts. Verify RTK checksums. State: agent-directory `updates/`, never `.rcs` definitions. Install only used navigation recipes; preserve custom/system servers. Failures warn/retry next launch; rollback is not guaranteed.
+Launch updates: fast-forward pull clean `.rcs` main/master from its matching remote upstream, skipping active Git operations. No hooks/stash/rebase/reset/push. Then check latest stable Pi, pi-subagents, Playwright/Chromium, RTK, proper-lockfile and used navigation recipes; preserve custom/system servers. No CI gate, npm scripts, Node/Homebrew upgrades or session restarts. Verify RTK checksums. Dependency state: agent-directory `updates/`, not `.rcs`. Failures warn/continue/retry next launch; no guaranteed rollback.
 
 Recovery: `PI_AUTO_UPDATE=0 pi --no-extensions` or `--offline`. Nested/child launches skip updates. `PI_AUTO_UPDATE=0 ./setup-pi.sh` uses bootstrap core/browser versions; `--skip-install` only relinks.
 
@@ -36,4 +36,4 @@ git diff --check
 
 Capture logs locally; report totals/failures. Check new files too. Navigation: `PI_CODE_NAV_LIVE=1 node --test tests/pi-code-navigation*.test.mjs`; RTK: `PI_RTK_LIVE=1 node --test tests/pi-efficiency*.test.mjs`. Browser changes require live search/local interaction tests.
 
-Restart for new extensions/startup changes; `/reload` refreshes loaded resources. Commit/push only when authorized. State stays outside Git/Obsidian; log in separately on each Mac.
+Pulled resources load in the new session; launcher/updater changes apply next launch. Rerun setup for new links; `/reload` refreshes resources. Commit/push only when authorized. State stays outside Git/Obsidian; log in separately on each Mac.
