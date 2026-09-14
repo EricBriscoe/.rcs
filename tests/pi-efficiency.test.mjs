@@ -147,13 +147,13 @@ test('RTK installer verifies pinned archives, installs atomically, rejects tampe
 
 test('Pi Markdown remains lean and maintenance stays on demand', async () => {
   const root = new URL('../', import.meta.url);
-  const paths = ['README.md', 'pi/AGENTS.md', 'pi/SUBAGENTS.md', 'pi/extensions/code-navigation/README.md', 'pi/extensions/efficiency/README.md', 'pi/skills/pi-maintenance/SKILL.md', 'pi/skills/schlep/SKILL.md'];
+  const paths = ['README.md', 'AGENTS.md', 'pi/SUBAGENTS.md', 'pi/extensions/code-navigation/README.md', 'pi/extensions/efficiency/README.md', 'pi/skills/pi-maintenance/SKILL.md', 'pi/skills/schlep/SKILL.md'];
   const files = await Promise.all(paths.map(path => readFile(new URL(path, root), 'utf8')));
   assert.ok(Buffer.byteLength(files[1]) < 2500, 'global instructions budget');
   const owned = [...new Set(execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', 'README.md', ':(glob)pi/**/*.md'], { cwd: root, encoding: 'utf8' }).split('\0').filter(Boolean))];
   const sizes = await Promise.all(owned.filter(path => existsSync(new URL(path, root))).map(async path => Buffer.byteLength(await readFile(new URL(path, root), 'utf8'))));
   assert.ok(sizes.reduce((sum, size) => sum + size, 0) < 33500, 'all owned Markdown budget, including new files');
-  assert.match(files[1], /pi-maintenance/); assert.doesNotMatch(files[1], /no routine.*agents|\/orchestrate/);
+  assert.match(files[0], /pi-maintenance/);
   assert.match(files[5], /python3 -m unittest/);
   assert.match(files[6], /still push pending commits/);
   assert.match(files[6], /configured upstream using an explicit remote\/refspec/);

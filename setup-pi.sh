@@ -68,32 +68,12 @@ fi
 pi_agent_dir="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
 mkdir -p "$pi_agent_dir"
 pi_agent_dir="$(cd "$pi_agent_dir" && pwd)"
-link_resource() {
-  local source="$1" destination="$2" label="$3" backup_dir previous_target
-  mkdir -p "$(dirname "$destination")"
-  if [[ -L "$destination" ]] && [[ "$(readlink "$destination")" == "$source" ]]; then
-    return
-  fi
-  if [[ -e "$destination" || -L "$destination" ]]; then
-    backup_dir="$(mktemp -d "$pi_agent_dir/$label-backup.XXXXXX")"
-    previous_target=""
-    if [[ -L "$destination" ]]; then
-      previous_target="$(readlink "$destination")"
-    fi
-    if [[ -n "$previous_target" && "$previous_target" != /* ]]; then
-      ln -s "$(dirname "$destination")/$previous_target" "$backup_dir/$(basename "$destination")"
-      rm "$destination"
-    else
-      mv "$destination" "$backup_dir/$(basename "$destination")"
-    fi
-    printf 'Previous %s saved to %s\n' "$label" "$backup_dir"
-  fi
-  ln -s "$source" "$destination"
-}
+backup_root="$pi_agent_dir"
+source "$REPO/setup-common.sh"
 
 link_resource "$REPO/pi/settings.json" "$pi_agent_dir/settings.json" settings
 link_resource "$REPO/pi/models.json" "$pi_agent_dir/models.json" models
-link_resource "$REPO/pi/AGENTS.md" "$pi_agent_dir/AGENTS.md" instructions
+link_resource "$REPO/AGENTS.md" "$pi_agent_dir/AGENTS.md" instructions
 link_resource "$REPO/pi/SUBAGENTS.md" "$pi_agent_dir/SUBAGENTS.md" instructions
 link_resource "$REPO/pi/subagents.json" "$pi_agent_dir/extensions/subagent/config.json" subagent-config
 # Keep sibling names identical to the checkout for relative extension imports.

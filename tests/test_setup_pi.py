@@ -82,7 +82,7 @@ class PiSetupTests(unittest.TestCase):
         for link, source in (
             (self.settings, REPO / "pi/settings.json"),
             (self.agent_dir / "models.json", REPO / "pi/models.json"),
-            (self.instructions, REPO / "pi/AGENTS.md"),
+            (self.instructions, REPO / "AGENTS.md"),
             (self.agent_dir / "SUBAGENTS.md", REPO / "pi/SUBAGENTS.md"),
             (self.agent_dir / "extensions/subagent/config.json", REPO / "pi/subagents.json"),
             (self.web_extension, REPO / "pi/extensions/web"),

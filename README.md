@@ -1,20 +1,22 @@
 # .rcs
 
-macOS shell, editor, and Pi configuration.
+Shell, editor, and Pi configuration for macOS. Full setup requires Apple Silicon Homebrew (`/opt/homebrew`).
 
 ## Install / sync
 
 ```sh
 git clone https://github.com/EricBriscoe/.rcs.git ~/dev/.rcs
 cd ~/dev/.rcs
-./setup.sh                 # whole dotfiles setup; replaces conflicting resources
+./setup.sh                 # full setup; backs up conflicting resources
 # Or Pi only:
 ./setup-pi.sh
 export PATH="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/bin:$PATH"
 pi
 ```
 
-Full setup installs shell/editor tools and links resources. Neovim installs plugins on first launch; `:Lazy sync` updates them.
+Full setup installs shell/editor tools, Starship for Zsh, Pi, and the locked LazyVim plugins. Reruns preserve correct links and back up conflicts to `~/.local/state/rcs/backups` (Pi uses its agent directory). `:Lazy sync` updates plugins.
+
+Root `AGENTS.md` is the shared instruction source for Pi, Codex, and Claude. It starts empty; setup never clears it. Pi always links it. If `codex` or `claude` is on PATH, full setup links `~/.codex/AGENTS.md` or `~/.claude/CLAUDE.md`, plus their work/personal account directories. `CODEX_HOME` and `CLAUDE_CONFIG_DIR` also receive links when set. Other harness files and credentials stay unchanged. Editor links respect `XDG_CONFIG_HOME`.
 
 Pi setup installs Node ≥22.19, ripgrep, fd, Pi, Playwright/Chromium, checksum-verified RTK, and packages from `pi/settings.json`. Conflicts are backed up; `--skip-install` only relinks.
 
@@ -49,7 +51,7 @@ Keep credentials and runtime data outside Git/Obsidian. Permissions are not encr
 ## Checks
 
 ```sh
-bash -n setup-pi.sh setup.sh
+bash -n setup-pi.sh setup.sh setup-common.sh
 python3 -m unittest discover -s tests -v
 node --test tests/pi-*.test.mjs
 git diff --check

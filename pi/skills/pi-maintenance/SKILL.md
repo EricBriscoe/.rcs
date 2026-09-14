@@ -8,7 +8,7 @@ Resolve `${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/settings.json` to `<checkout>/p
 
 | Source | Purpose |
 |---|---|
-| `pi/settings.json`, `pi/models.json`, `pi/AGENTS.md` | Defaults, model budgets, lean global rules |
+| `pi/settings.json`, `pi/models.json`, `AGENTS.md` | Defaults, model budgets, shared harness instructions |
 | `pi/version`, `pi/playwright-version`, `pi/rtk.json`, `pi/code-navigation.json` | Bootstrap/recovery versions and recipes |
 | `pi/extensions/<name>/` | Native extension and adjacent README |
 | `pi/launch.mjs`, `pi/update-deps.mjs`, `pi/rtk.mjs` | Launch-time updates and shared RTK |
@@ -28,7 +28,7 @@ Recovery: `PI_AUTO_UPDATE=0 pi --no-extensions` or `--offline`. Nested/child lau
 From the checkout:
 
 ```sh
-bash -n setup-pi.sh setup.sh
+bash -n setup-pi.sh setup.sh setup-common.sh
 python3 -m unittest discover -s tests -v
 node --test tests/pi-*.test.mjs
 git diff --check

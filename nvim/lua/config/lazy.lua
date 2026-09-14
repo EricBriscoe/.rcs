@@ -8,11 +8,26 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
       { out, "WarningMsg" },
       { "\nPress any key to exit..." },
     }, true, {})
-    vim.fn.getchar()
+    if #vim.api.nvim_list_uis() > 0 then
+      vim.fn.getchar()
+    end
     os.exit(1)
   end
 end
 vim.opt.rtp:prepend(lazypath)
+
+if vim.g.rcs_bootstrap then
+  -- Keep pins during every install round and restore; setup must not rewrite the lockfile.
+  require("lazy.manage.lock").update = function() end
+  -- Capture Lazy errors before LazyVim or a UI plugin buffers notifications.
+  local util = require("lazy.core.util")
+  local report_error = util.error
+  util.error = function(message, options)
+    local text = type(message) == "table" and table.concat(message, "\n") or tostring(message)
+    vim.g.rcs_bootstrap_errors = (vim.g.rcs_bootstrap_errors or "") .. text .. "\n"
+    return report_error(message, options)
+  end
+end
 
 require("lazy").setup({
   spec = {

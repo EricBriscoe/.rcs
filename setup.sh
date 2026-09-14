@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Idempotent setup for this dotfiles repo. Mercilessly replaces any existing
-# ~/.zshrc, ~/.tmux.conf, ~/.config/nvim, ~/.config/sqlfluff.
+# Idempotent setup for this dotfiles repo. Back up conflicting resources.
 #
 # macOS + Homebrew (Apple Silicon) only.
 
@@ -17,6 +16,9 @@ if [[ ! -x /opt/homebrew/bin/brew ]]; then
 fi
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$REPO/setup-common.sh"
+backup_root="$HOME/.local/state/rcs/backups"
+config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
 
 say() { printf '\n==> %s\n' "$*"; }
 
@@ -35,7 +37,7 @@ eval "$brew_shellenv"
 say "Installing Homebrew packages"
 brew install \
   fnm zoxide fzf starship \
-  neovim ripgrep fd bat \
+  neovim ripgrep fd bat lazygit tree-sitter-cli \
   git tmux node python
 
 say "Installing oh-my-zsh"
@@ -58,16 +60,33 @@ if [[ ! -x /opt/homebrew/bin/virtualenvwrapper.sh ]]; then
 fi
 mkdir -p "$HOME/.venvs"
 
-say "Linking dotfiles into \$HOME (replacing anything in the way)"
-mkdir -p "$HOME/.config"
-rm -rf "$HOME/.zshrc" "$HOME/.tmux.conf" "$HOME/.config/nvim" "$HOME/.config/sqlfluff"
-ln -s "$REPO/zshrc"     "$HOME/.zshrc"
-ln -s "$REPO/tmux.conf" "$HOME/.tmux.conf"
-ln -s "$REPO/nvim"      "$HOME/.config/nvim"
-ln -s "$REPO/sqlfluff"  "$HOME/.config/sqlfluff"
+say "Linking dotfiles (backing up conflicts)"
+link_resource "$REPO/zshrc" "$HOME/.zshrc" zshrc
+link_resource "$REPO/tmux.conf" "$HOME/.tmux.conf" tmux
+link_resource "$REPO/nvim" "$config_home/nvim" nvim
+link_resource "$REPO/sqlfluff" "$config_home/sqlfluff" sqlfluff
 
 say "Installing Pi and linking its settings"
 "$REPO/setup-pi.sh"
 
-say "Done. Open a new shell. nvim's first launch will bootstrap lazy.nvim, LazyVim, and Mason."
+say "Linking shared instructions for installed harnesses"
+# Claude's native installer uses ~/.local/bin, even before the new zshrc loads.
+export PATH="$HOME/.local/bin:$PATH"
+if command -v codex >/dev/null 2>&1; then
+  for directory in "$HOME/.codex" "${CODEX_HOME:-$HOME/.codex}" \
+    "$HOME/.codex/envs/work" "$HOME/.codex/envs/personal"; do
+    link_resource "$REPO/AGENTS.md" "$directory/AGENTS.md" codex-instructions
+  done
+fi
+if command -v claude >/dev/null 2>&1; then
+  for directory in "$HOME/.claude" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" \
+    "$HOME/.claude/envs/work" "$HOME/.claude/envs/personal"; do
+    link_resource "$REPO/AGENTS.md" "$directory/CLAUDE.md" claude-instructions
+  done
+fi
+
+say "Installing locked LazyVim plugins"
+NVIM_APPNAME=nvim nvim --headless -u NONE -i NONE -n -l "$REPO/nvim/bootstrap.lua"
+
+say "Done. Open a new shell. Mason installs language tools when needed."
 say "Machine-specific extras go in ~/.zshrc.local (and nvim/lua/plugins/local.lua), sourced if present."

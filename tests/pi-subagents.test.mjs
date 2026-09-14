@@ -15,15 +15,11 @@ const agentDir = process.env.PI_CODING_AGENT_DIR || join(homedir(), '.pi/agent')
 const npmRoot = join(agentDir, 'npm');
 const installed = join(npmRoot, 'node_modules/pi-subagents');
 
-test('replacement tracks upstream updates with dynamic model selection, not role pins or a model allowlist', async () => {
+test('replacement tracks upstream updates without role pins or a model allowlist', async () => {
   assert.ok(settings.packages.includes('npm:pi-subagents'));
   assert.equal(settings.subagents, undefined);
   assert.equal(settings.enabledModels, undefined);
   for (const path of ['pi/extensions/orchestrate', 'pi/orchestrator.json']) assert.equal(existsSync(new URL(path, checkout)), false);
-  const rules = await readFile(new URL('pi/AGENTS.md', checkout), 'utf8');
-  assert.doesNotMatch(rules, /orchestrate|no recursion|native Pi workers only|no routine.*agents|Do not inherit ancestor/);
-  assert.match(rules, /full authenticated OpenAI catalog/);
-  assert.match(rules, /Prefer newer generations/);
 });
 
 test('long-run policy keeps monitoring advisory and documents stock limits', async () => {
@@ -42,9 +38,6 @@ test('long-run policy keeps monitoring advisory and documents stock limits', asy
   assert.match(policy, /steeringRecovery: false/);
   assert.match(policy, /auto-drain still fails after 30 minutes/);
   assert.match(policy, /72 hours is a hard deadline, not unlimited/);
-  const instructions = await readFile(new URL('pi/AGENTS.md', checkout), 'utf8');
-  assert.match(instructions, /Cancellation is the coordinator's decision/);
-  assert.match(instructions, /SUBAGENTS\.md/);
 });
 
 test('installed pi-subagents loads long-run settings via standard discovery in both Pi distributions, without role/model restrictions', { timeout: 60000 }, async t => {
