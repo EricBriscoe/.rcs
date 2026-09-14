@@ -13,6 +13,10 @@ const { SettingsManager } = await import(pathToFileURL(join(host, 'dist/core/set
 test('native package install persistence retains Bigpowers filters and discovery disables executable resources', async t => {
   const root = await mkdtemp(join(tmpdir(), 'pi package filters '));
   t.after(() => rm(root, { recursive: true, force: true }));
+  // Package discovery also reads ~/.agents/skills, independently of agentDir.
+  const previousHome = process.env.HOME;
+  process.env.HOME = root;
+  t.after(() => { if (previousHome === undefined) delete process.env.HOME; else process.env.HOME = previousHome; });
   const agent = join(root, 'agent'), packageRoot = join(agent, 'npm/node_modules/bigpowers');
   const put = async (path, text) => {
     const file = join(packageRoot, path);

@@ -10,7 +10,7 @@ import test from "node:test";
 const exec = promisify(execFile);
 const checkout = dirname(dirname(fileURLToPath(import.meta.url)));
 const packageDir = join(execFileSync("npm", ["root", "-g"], { encoding: "utf8" }).trim(), "@earendil-works/pi-coding-agent");
-const names = ["appearance", "ask-user", "code-navigation", "efficiency", "memory", "model-briefing", "monitor", "project-context", "web"];
+const names = ["appearance", "ask-user", "code-navigation", "efficiency", "model-briefing", "monitor", "project-context", "web"];
 
 test("migrated installer links load sibling imports in both Pi CLI distributions", { timeout: 60000 }, async t => {
   const root = await mkdtemp(join(tmpdir(), "pi installed extensions "));
@@ -41,7 +41,8 @@ export default function(pi) {
       const { stdout, stderr } = await pending;
       assert.doesNotMatch(stdout + stderr, /Failed to load extension|Cannot find module|duplicate/i);
       const loaded = JSON.parse(await readFile(output, "utf8"));
-      for (const tool of ["ask_user", "code_nav", "code_search", "memory", "monitor", "web_search", "web_browse"]) assert.ok(loaded.tools.includes(tool), tool);
+      for (const tool of ["ask_user", "code_nav", "code_search", "monitor", "web_search", "web_browse"]) assert.ok(loaded.tools.includes(tool), tool);
+      assert.ok(!loaded.tools.includes("memory"), "custom memory tool is retired");
       const commands = loaded.commands.filter(c => c.source === "extension");
       assert.ok(!commands.some(c => c.name === "orchestrate"));
       assert.ok(commands.some(c => c.name === "code-nav"));

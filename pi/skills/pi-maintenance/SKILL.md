@@ -21,7 +21,7 @@ Trim Markdown redundancy; preserve safety, commands and limits. Raise caps gradu
 
 Codex Astra: 416,384 context budget − 16,384 default reserve = ~400K compaction. Other models unchanged. Open `/model` or restart to reload overrides; provider limits apply.
 
-Top-level launches update stable Pi, all unpinned npm packages in `pi/settings.json`, Playwright/Chromium, RTK, proper-lockfile and managed navigation tools. No CI/approval gate, npm scripts, Node/Homebrew upgrades or session restarts. Verify RTK checksums. State: agent-directory `updates/`, never `.rcs` definitions. Install only used navigation recipes; preserve custom/system servers. Failures warn/retry next launch; rollback is not guaranteed.
+Launch updates: fast-forward pull clean `.rcs` main/master from its matching remote upstream, skipping active Git operations. No hooks/stash/rebase/reset/push. Then update stable Pi, all unpinned npm packages in `pi/settings.json`, Playwright/Chromium, RTK, proper-lockfile and used navigation recipes; preserve custom/system servers. No CI gate, npm scripts, Node/Homebrew upgrades or session restarts. Verify RTK checksums. Dependency state: agent-directory `updates/`, not `.rcs`. Failures warn/continue/retry next launch; no guaranteed rollback.
 
 Recovery: `PI_AUTO_UPDATE=0 pi --no-extensions` or `--offline`. Nested/child launches skip updates. `PI_AUTO_UPDATE=0 ./setup-pi.sh` uses bootstrap core/browser versions; `--skip-install` only relinks.
 
@@ -36,4 +36,4 @@ git diff --check
 
 Capture logs locally; report totals/failures. Check new files too. Navigation: `PI_CODE_NAV_LIVE=1 node --test tests/pi-code-navigation*.test.mjs`; RTK: `PI_RTK_LIVE=1 node --test tests/pi-efficiency*.test.mjs`. Browser changes require live search/local interaction tests.
 
-Restart for new extensions/startup changes; `/reload` refreshes loaded resources. Commit/push only when authorized. State stays outside Git/Obsidian; log in separately on each Mac.
+Pulled resources load in the new session; launcher/updater changes apply next launch. Rerun setup for new links; `/reload` refreshes resources. Commit/push only when authorized. State stays outside Git/Obsidian; log in separately on each Mac.

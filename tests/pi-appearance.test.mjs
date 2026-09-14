@@ -6,7 +6,6 @@ import { createRequire } from "node:module";
 import { stripVTControlCharacters as plain } from "node:util";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
-import { memoryStatus } from "../pi/extensions/memory/status.ts";
 
 const checkout = fileURLToPath(new URL("../", import.meta.url));
 const host = join(execFileSync("npm", ["root", "-g"], { encoding: "utf8" }).trim(), "@earendil-works/pi-coding-agent");
@@ -176,18 +175,4 @@ for (const mode of ["rpc", "json", "print"]) test(`appearance is inert in ${mode
   assert.equal(f.indicator(), undefined);
   assert.equal(f.listeners(), 0);
   assert.deepEqual(f.notices, []);
-});
-
-test("memory is quiet at rest but preserves disabled, failed, deferred and learning states", () => {
-  const stats = { reading: true, learning: true, jobs: [] };
-  assert.equal(memoryStatus(stats), undefined);
-  assert.match(memoryStatus({ ...stats, reading: false }), /recall off/);
-  assert.match(memoryStatus({ ...stats, learning: false }), /learning off/);
-  assert.match(memoryStatus(stats, undefined, true), /deferred.*\/memory/);
-  const queued = { ...stats, jobs: [{ state: "pending", count: 3 }] };
-  assert.match(memoryStatus(queued), /queued.*idle/);
-  assert.match(memoryStatus(queued, { allowed: false, mode: "fallback", reason: "working" }), /queued.*idle/);
-  assert.match(memoryStatus(queued, { allowed: false, mode: "quota", reason: "quota exhausted" }), /paused: quota exhausted.*\/memory/);
-  assert.match(memoryStatus({ ...stats, jobs: [{ state: "running", count: 1 }] }, { allowed: true, mode: "fallback" }), /learning \(fallback\)/);
-  assert.match(memoryStatus({ ...stats, jobs: [{ state: "failed", count: 1 }] }), /failed.*\/memory retry/);
 });

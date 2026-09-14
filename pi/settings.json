@@ -19,7 +19,8 @@
       "extensions": [],
       "themes": []
     },
-    "npm:pi-context-view"
+    "npm:pi-context-view",
+    "npm:pi-memory@0.4.2"
   ],
   "markdown": {
     "mermaid": "streaming"
