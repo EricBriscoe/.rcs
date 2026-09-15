@@ -71,34 +71,30 @@ Run as `ENV=1 node --test <glob>`; live model tests use existing login, never co
 
 MCP server connections belong in `~/.config/mcp/mcp.json`, outside this repository. Setup installs the adapter only; configure servers and sign in on each Mac with `/mcp setup` and `/mcp-auth <server>`. Do not also load the installed adapter from a file in `~/.pi/agent/extensions/`; this causes duplicate tool registration.
 
-`~/.zshrc.local` loads last for private paths, secrets, and shell functions. Optional, gitignored `nvim/lua/plugins/local.lua` supplies lazy.nvim specs; return `{}` if none. Append functions to `require("util.project").db_sources` for dadbod-ui connections (`{ name = connection_url }`).
+`~/.zshrc.local` loads last for private paths, secrets, and shell functions. Optional, gitignored `nvim/lua/plugins/local.lua` supplies lazy.nvim specs; return `{}` if none.
 
 ## Shell and other files
 
-[zshrc](zshrc) uses [Starship](https://starship.rs) for its prompt, with oh-my-zsh Git helpers, optional tool integrations, daily compinit caching, and branch tab titles. `./setup.sh` installs Starship through Homebrew (safe to rerun); shell startup only initializes it if installed. It selects Homebrew Python for virtualenvwrapper. Directory changes activate `<git-root>/venv` or `~/.venvs/<main-repo-name>` across worktrees; only these environments are deactivated automatically.
+[zshrc](zshrc) uses [Starship](https://starship.rs) for its prompt, optional tool integrations, daily compinit caching, and branch tab titles. `./setup.sh` installs Starship through Homebrew (safe to rerun); shell startup only initializes it if installed. It selects Homebrew Python for virtualenvwrapper. Directory changes activate `<git-root>/venv` or `~/.venvs/<main-repo-name>` across worktrees; only these environments are deactivated automatically.
 
-- `olc [parent]`: open branch changes in VS Code; parent comes from the reflog, else main.
 - `cleandocker`: confirm, then remove all containers and prune Docker data.
 - `claude-work` / `claude-personal`: separate account config directories.
 - `codex-work` / `codex-personal`: separate login/runtime state; shared config, instructions, skills, plugins, hooks, policies, memories, and automations.
 
-[tmux.conf](tmux.conf) uses pane titles. [sqlfluff/](sqlfluff/) sets Postgres style; project config overrides it. [keyboards/](keyboards/) holds a VIA layout; setup does not install it.
+[tmux.conf](tmux.conf) uses pane titles.
 
 ## Neovim
 
 [nvim/](nvim/) uses LazyVim. `lazyvim.json` selects extras; `lazy-lock.json` pins plugins. Extras cover Python, TypeScript/Biome/ESLint, SQL, Terraform, Docker, YAML/JSON/TOML, Markdown, Git, Rust, Prettier, and neotest. Prettier requires project config.
 
-`lua/util/project.lua` resolves Git/worktree roots, mainline, venvs, and `.env` files. Git roots take priority over LSP roots. Python uses `<root>/venv`, `<root>/.venv`, then `$WORKON_HOME/<main-repo-name>` (default `~/.venvs`). Without a root it can use `$VIRTUAL_ENV`. The selected venv supplies Python and Ruff when available. Biome uses the nearest config and ancestor `node_modules/.bin/biome`, else PATH. ESLint needs both config and an installed binary.
+`lua/util/project.lua` resolves per-project venvs. Git roots take priority over LSP roots. Python uses `<root>/venv`, `<root>/.venv`, then `$WORKON_HOME/<main-repo-name>` (default `~/.venvs`). Without a root it can use `$VIRTUAL_ENV`. The selected venv supplies Python and Ruff when available.
 
-`lua/plugins/` configures language tools and navigation. Format on save uses project tools. SQL uses Postgres formatting without diagnostics; `db/deltas/` is exempt. Indentation is four spaces, two for Lua. `.tf`/`.tofu` use Terraform; Compose uses its language server; Swift uses sourcekit-lsp.
+`lua/plugins/python.lua` wires basedpyright, ruff, and neotest to the project venv. Format on save uses project tools. Indentation is four spaces, two for Lua. `.tf`/`.tofu` use Terraform; Compose uses its language server.
 
 Leader: Space; `<space>sk` lists mappings.
 
 | Keys | Action |
 |---|---|
-| `<space>gw` / `<space>se` | Worktrees / branch edits with diff preview |
-| `:Olc` or `:olc` | Load branch changes as buffers |
-| `<space>D` | Database UI |
 | `<space>tt` / `<space>tr` / `<space>ts` | Test file / nearest / summary |
 | `<space>cv` / `<space>gg` | Venv picker / lazygit |
 | `<space>uf` / `<space>uF` | Toggle format globally / for buffer |

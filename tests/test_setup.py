@@ -33,7 +33,7 @@ class FullSetupTests(unittest.TestCase):
         # Keep the Apple Silicon contract, but route its fixed Homebrew paths to a sandbox.
         script = self.repo / "setup.sh"
         script.write_text(script.read_text().replace("/opt/homebrew", str(self.bin.parent)))
-        for name in ("pi", "skills", "nvim", "sqlfluff", "zshrc", "tmux.conf"):
+        for name in ("pi", "skills", "nvim", "zshrc", "tmux.conf"):
             (self.repo / name).symlink_to(REPO / name)
         self.stub("uname", 'echo "${TEST_OS:-Darwin}"')
         self.stub("brew", f'''case "$1" in
@@ -48,8 +48,6 @@ exit "${NODE_EXIT:-0}"''')
         self.stub("nvim", 'printf "nvim %s app=%s\\n" "$*" "$NVIM_APPNAME" >> "$TEST_LOG"; exit "${NVIM_EXIT:-0}"')
         for name in ("rg", "fd", "qmd", "playwright-cli", "pip3"):
             self.stub(name, f'printf "{name} %s\\n" "$*" >> "$TEST_LOG"')
-        self.stub("curl", '''printf 'curl\\n' >> "$TEST_LOG"
-printf 'mkdir -p "$HOME/.oh-my-zsh"\\n' ''')
         fzf = self.bin.parent / "fzf/install"
         fzf.parent.mkdir()
         fzf.write_text('#!/bin/sh\nprintf "fzf\\n" >> "$TEST_LOG"\n')
@@ -75,7 +73,7 @@ printf 'mkdir -p "$HOME/.oh-my-zsh"\\n' ''')
         self.assert_success()
         expected = {
             ".zshrc": "zshrc", ".tmux.conf": "tmux.conf", ".config/nvim": "nvim",
-            ".config/sqlfluff": "sqlfluff", ".pi/agent/AGENTS.md": "AGENTS.md",
+            ".pi/agent/AGENTS.md": "AGENTS.md",
             ".pi/agent/settings.json": "pi/settings.json",
             ".codex/AGENTS.md": "AGENTS.md", ".claude/CLAUDE.md": "AGENTS.md",
         }
@@ -104,7 +102,6 @@ printf 'mkdir -p "$HOME/.oh-my-zsh"\\n' ''')
         self.assertEqual(len((self.home / ".zprofile").read_text().splitlines()), 1)
         self.assertEqual(list(self.home.rglob("*-backup.*")), [])
         log = self.log.read_text()
-        self.assertEqual(log.count("curl\n"), 1)
         self.assertIn("starship", log)
         self.assertIn("neovim", log)
         self.assertIn("@earendil-works/pi-coding-agent@", log)

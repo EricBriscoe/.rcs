@@ -1,9 +1,3 @@
-export ZSH="$HOME/.oh-my-zsh"
-ZSH_THEME="" # Starship owns the prompt; keep oh-my-zsh's helpers/plugins.
-plugins=(git)
-
-source $ZSH/oh-my-zsh.sh
-
 export WORKON_HOME=~/.venvs
 export EDITOR=nvim
 
@@ -52,45 +46,6 @@ _auto_venv  # cover the shell's starting directory; chpwd only fires on cd
 eval "$(fnm env)"
 eval "$(fnm completions --shell zsh)"
 
-# olc [parent]: `code` opens every file changed on this branch since `parent`
-# (auto-detected from reflog, defaults to main). On main/master: the last commit.
-olc() {
-  local branch
-  branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || {
-    echo "error: not in a git repo"
-    return 1
-  }
-
-  # On main/master: fall back to last commit
-  if [[ "$branch" == "main" || "$branch" == "master" ]]; then
-    git show --pretty="" --name-only | xargs code
-    return
-  fi
-
-  # Use explicit arg, or auto-detect parent branch from reflog, or fall back to main
-  local parent="${1:-}"
-  if [[ -z "$parent" ]]; then
-    parent=$(git reflog show HEAD 2>/dev/null \
-      | sed -n "s|.*checkout: moving from \(.*\) to ${branch}$|\1|p" \
-      | head -1)
-    [[ -z "$parent" || "$parent" == "$branch" ]] && parent="main"
-  fi
-
-  local base
-  base=$(git merge-base HEAD "$parent" 2>/dev/null) || {
-    echo "error: could not find merge-base with '$parent'"
-    return 1
-  }
-
-  local files
-  files=$(git diff --name-only "$base"..HEAD)
-  if [[ -z "$files" ]]; then
-    echo "No changed files since branching from $parent."
-    return 0
-  fi
-  echo "$files" | xargs code
-}
-
 cleandocker () {
   read -q "REPLY?Nuke ALL Docker containers, images, volumes, networks, and build cache? [y/N] " || return
   echo
@@ -121,9 +76,6 @@ export PATH="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/bin:$PATH"
 test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell_integration.zsh"
 
 # Tab title = git branch when inside a repo, else the current directory name.
-# Reuses oh-my-zsh's `title` helper (handles iTerm2/tmux escape codes); we just
-# feed it the branch/dir and stop omz from overwriting it with PWD/command name.
-DISABLE_AUTO_TITLE=true
 _tab_title() {
   emulate -L zsh
   local name
@@ -135,7 +87,7 @@ _tab_title() {
       name=${PWD:t}                                       # not a repo -> dir name
     fi
   fi
-  title "$name"
+  printf '\e]1;%s\a\e]2;%s\a' "$name" "$name"  # tab title, window/pane title
 }
 autoload -U add-zsh-hook
 add-zsh-hook precmd _tab_title

@@ -40,13 +40,6 @@ brew install \
   neovim ripgrep fd bat lazygit tree-sitter-cli \
   git tmux node python
 
-say "Installing oh-my-zsh"
-if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
-  RUNZSH=no KEEP_ZSHRC=yes sh -c \
-    "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" \
-    "" --unattended --keep-zshrc
-fi
-
 say "Wiring up fzf key bindings (ctrl+t, ctrl+r) and completion"
 # Writes ~/.fzf.zsh, which our zshrc sources. --no-update-rc keeps it from
 # touching rc files itself.
@@ -64,7 +57,6 @@ say "Linking dotfiles (backing up conflicts)"
 link_resource "$REPO/zshrc" "$HOME/.zshrc" zshrc
 link_resource "$REPO/tmux.conf" "$HOME/.tmux.conf" tmux
 link_resource "$REPO/nvim" "$config_home/nvim" nvim
-link_resource "$REPO/sqlfluff" "$config_home/sqlfluff" sqlfluff
 
 say "Installing Pi and linking its settings"
 "$REPO/setup-pi.sh"

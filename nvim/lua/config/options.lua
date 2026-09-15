@@ -14,7 +14,7 @@ vim.g.lazyvim_prettier_needs_config = true
 vim.g.root_spec = { { ".git" }, "lsp", "cwd" }
 
 -- Four-space indentation matches the usual formatter defaults (ruff, biome,
--- sqlfluff, shfmt); Lua is set to two in autocmds.lua to match stylua.
+-- shfmt); Lua is set to two in autocmds.lua to match stylua.
 local opt = vim.opt
 opt.shiftwidth = 4
 opt.tabstop = 4
