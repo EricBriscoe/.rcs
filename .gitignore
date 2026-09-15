@@ -14,3 +14,6 @@ pi/settings-backup.*/
 
 # Machine-local LazyVim plugin spec.
 nvim/lua/plugins/local.lua
+
+# Pi workspace runtime state (subagent schedules, runs). Never commit.
+.pi/

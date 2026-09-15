@@ -104,7 +104,7 @@ eval "$(zoxide init zsh)"
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
 # The following lines have been added by Docker Desktop to enable Docker CLI completions.
-fpath=(/Users/eric/.docker/completions $fpath)
+fpath=("$HOME/.docker/completions" $fpath)
 # End of Docker CLI completions
 autoload -Uz compinit
 if [[ -n ~/.zcompdump(#qN.mh+24) ]]; then
