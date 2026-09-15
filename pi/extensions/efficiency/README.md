@@ -12,4 +12,4 @@ Filters isolate HOME/cwd and disable TOML/telemetry; commands keep their environ
 
 Private state: agent-directory `efficiency/usage.sqlite`, raw output and isolated `rtk-home` (0700/0600). Logs can contain secrets, are unencrypted, and never belong in Git/Obsidian. Metadata contains no commands/prompts/source. Stop Pi before deleting state.
 
-Pi/terminal share `~/.local/bin/rtk`. [Updates](../../skills/pi-maintenance/SKILL.md). Tests: `node --test tests/pi-efficiency*.test.mjs`; `PI_RTK_LIVE=1` also runs real RTK fixtures.
+Pi/terminal share `~/.local/bin/rtk`. [Updates](../../../skills/pi-maintenance/SKILL.md). Tests: `node --test tests/pi-efficiency*.test.mjs`; `PI_RTK_LIVE=1` also runs real RTK fixtures.

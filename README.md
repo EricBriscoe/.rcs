@@ -16,7 +16,7 @@ pi
 
 Full setup installs shell/editor tools, Starship for Zsh, Pi, and the locked LazyVim plugins. Reruns preserve correct links and back up conflicts to `~/.local/state/rcs/backups` (Pi uses its agent directory). `:Lazy sync` updates plugins.
 
-Root `AGENTS.md` is the shared instruction source for Pi, Codex, and Claude. It starts empty; setup never clears it. Pi always links it. If `codex` or `claude` is on PATH, full setup links `~/.codex/AGENTS.md` or `~/.claude/CLAUDE.md`, plus their work/personal account directories. `CODEX_HOME` and `CLAUDE_CONFIG_DIR` also receive links when set. Other harness files and credentials stay unchanged. Editor links respect `XDG_CONFIG_HOME`.
+Root `AGENTS.md` is the shared instruction source for Pi, Codex, and Claude. It starts empty; setup never clears it. Pi always links it. If `codex` or `claude` is on PATH, full setup links `~/.codex/AGENTS.md` or `~/.claude/CLAUDE.md`, plus their work/personal account directories. `CODEX_HOME` and `CLAUDE_CONFIG_DIR` also receive links when set. Root `skills/` holds shared skills, linked per skill into `~/.pi/agent/skills`, `~/.codex/skills` (account homes share it), and every Claude config directory. Other harness files and credentials stay unchanged. Editor links respect `XDG_CONFIG_HOME`.
 
 Pi setup installs Node ≥22.19, ripgrep, fd, Pi, Playwright/Chromium, checksum-verified RTK, and packages from `pi/settings.json`. Conflicts are backed up; `--skip-install` only relinks.
 
@@ -26,7 +26,7 @@ On each Mac, `/login openai-codex` uses your subscription; credentials stay loca
 
 Vim prompt editing is enabled: `Esc` enters Normal mode; `i` returns to Insert. Motions, text objects, visual mode, `u` undo, and `Ctrl+r` redo work. In Normal mode, `:codex-pool` opens account settings.
 
-The Pi launcher pulls `.rcs` before updating dependencies and unpinned npm packages; [safeguards](pi/skills/pi-maintenance/SKILL.md). Repair: `PI_AUTO_UPDATE=0 pi --no-extensions`. Trusted workspace context includes `.pi/AGENTS.md`.
+The Pi launcher pulls `.rcs` before updating dependencies and unpinned npm packages; [safeguards](skills/pi-maintenance/SKILL.md). Repair: `PI_AUTO_UPDATE=0 pi --no-extensions`. Trusted workspace context includes `.pi/AGENTS.md`.
 
 | Feature | Usage / reference |
 |---|---|
@@ -39,8 +39,8 @@ The Pi launcher pulls `.rcs` before updating dependencies and unpinned npm packa
 | Bigpowers | Skills/prompts only; hooks disabled. `/skill:using-bigpowers`. Project provisioning (`bigpowers init`) is opt-in. |
 | Questions | `ask_user`: choices or text; Escape/blank/unavailable UI is not approval. Interactive/RPC only. |
 | Background commands | `monitor` start requires `notifyOn: "output"` (live events) or `"completion"` (one final result). Session-owned; bounded output, manual read/stop available. |
-| Commit + push | `/skill:schlep`: stage all non-ignored changes, commit, and push to the upstream. [Skill](pi/skills/schlep/SKILL.md) |
-| Maintenance | See [pi-maintenance](pi/skills/pi-maintenance/SKILL.md). |
+| Commit + push | `/skill:schlep`: stage all non-ignored changes, commit, and push to the upstream. [Skill](skills/schlep/SKILL.md) |
+| Maintenance | See [pi-maintenance](skills/pi-maintenance/SKILL.md). |
 
 `pi-chrome`: `/reload`, `/chrome onboard`, manually load its Chrome companion, `/chrome authorize` (15m), `/chrome doctor`. `/chrome revoke` locks access. Preferred when authorized/connected; broad signed-in-profile access, with page content sent to the model.
 

@@ -12,7 +12,7 @@ Resolve `${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/settings.json` to `<checkout>/p
 | `pi/version`, `pi/playwright-version`, `pi/rtk.json`, `pi/code-navigation.json` | Bootstrap/recovery versions and recipes |
 | `pi/extensions/<name>/` | Native extension and adjacent README |
 | `pi/launch.mjs`, `pi/update-deps.mjs`, `pi/rtk.mjs` | Launch-time updates and shared RTK |
-| `pi/skills/`, `pi/prompts/` | On-demand resources |
+| `skills/` | Shared skills, linked for Pi, Codex, and Claude |
 | `setup-pi.sh`, `tests/`, `README.md` | Installation, regression tests, usage |
 
 Read installed API docs/examples before changing extension contracts. Preserve symlinks/sibling names. Keep `pi-subagents` unversioned and stock. Details belong here or in extension READMEs.

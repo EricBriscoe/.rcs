@@ -32,7 +32,7 @@ test('standard Pi discovery loads global/project instructions and installed skil
   await writeFile(join(agent, 'settings.json'), '{}');
   await writeFile(join(agent, 'AGENTS.md'), 'GLOBAL_FIXTURE');
   await writeFile(join(cwd, 'AGENTS.md'), 'PROJECT_FIXTURE');
-  for (const name of ['schlep', 'pi-maintenance']) await cp(join(checkout, 'pi/skills', name), join(agent, 'skills', name), { recursive: true });
+  for (const name of ['schlep', 'pi-maintenance']) await cp(join(checkout, 'skills', name), join(agent, 'skills', name), { recursive: true });
   const probe = join(root, 'probe.ts');
   await writeFile(probe, `import {writeFileSync} from 'node:fs'; export default function(pi) {pi.registerCommand('resource-probe',{handler:async(_args,ctx)=>{writeFileSync(${JSON.stringify(output)},JSON.stringify({prompt:ctx.getSystemPrompt(),skills:ctx.getSystemPromptOptions().skills?.map(s=>s.name)}));}});}`);
   const pending = promisify(execFile)(process.execPath, [join(packageDir, 'dist/cli.js'), '--offline', '--no-session', '--approve', '-e', probe, '-p', '/resource-probe'], { cwd, env: { ...process.env, PI_CODING_AGENT_DIR: agent, HOME: root }, timeout: 25000 });

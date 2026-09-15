@@ -98,8 +98,9 @@ done
 for theme in quiet-graphite paper; do
   link_resource "$REPO/pi/themes/$theme.json" "$pi_agent_dir/themes/$theme.json" theme
 done
-for skill in schlep pi-maintenance; do
-  link_resource "$REPO/pi/skills/$skill" "$pi_agent_dir/skills/$skill" skill
+for skill in "$REPO"/skills/*/; do
+  skill="$(basename "$skill")"
+  link_resource "$REPO/skills/$skill" "$pi_agent_dir/skills/$skill" skill
 done
 link_resource "$REPO/pi/launch.mjs" "$pi_agent_dir/bin/pi" launcher
 link_resource "$REPO/pi/rtk.mjs" "$pi_agent_dir/bin/rtk" launcher

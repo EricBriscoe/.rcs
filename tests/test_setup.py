@@ -33,7 +33,7 @@ class FullSetupTests(unittest.TestCase):
         # Keep the Apple Silicon contract, but route its fixed Homebrew paths to a sandbox.
         script = self.repo / "setup.sh"
         script.write_text(script.read_text().replace("/opt/homebrew", str(self.bin.parent)))
-        for name in ("pi", "nvim", "sqlfluff", "zshrc", "tmux.conf"):
+        for name in ("pi", "skills", "nvim", "sqlfluff", "zshrc", "tmux.conf"):
             (self.repo / name).symlink_to(REPO / name)
         self.stub("uname", 'echo "${TEST_OS:-Darwin}"')
         self.stub("brew", f'''case "$1" in
@@ -82,6 +82,13 @@ printf 'mkdir -p "$HOME/.oh-my-zsh"\\n' ''')
         for harness, filename in (("codex", "AGENTS.md"), ("claude", "CLAUDE.md")):
             for account in ("work", "personal"):
                 expected[f".{harness}/envs/{account}/{filename}"] = "AGENTS.md"
+        for skill in ("schlep", "pi-maintenance"):
+            expected[f".pi/agent/skills/{skill}"] = f"skills/{skill}"
+            expected[f".codex/skills/{skill}"] = f"skills/{skill}"
+            expected[f".claude/skills/{skill}"] = f"skills/{skill}"
+            for account in ("work", "personal"):
+                expected[f".claude/envs/{account}/skills/{skill}"] = f"skills/{skill}"
+        self.assertFalse((self.home / ".codex/envs/work/skills").exists())
         inodes = {}
         for name, source in expected.items():
             path = self.home / name

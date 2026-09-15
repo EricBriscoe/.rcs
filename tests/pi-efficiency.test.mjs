@@ -147,7 +147,7 @@ test('RTK installer verifies pinned archives, installs atomically, rejects tampe
 
 test('Pi Markdown remains lean and maintenance stays on demand', async () => {
   const root = new URL('../', import.meta.url);
-  const paths = ['README.md', 'AGENTS.md', 'pi/SUBAGENTS.md', 'pi/extensions/code-navigation/README.md', 'pi/extensions/efficiency/README.md', 'pi/skills/pi-maintenance/SKILL.md', 'pi/skills/schlep/SKILL.md'];
+  const paths = ['README.md', 'AGENTS.md', 'pi/SUBAGENTS.md', 'pi/extensions/code-navigation/README.md', 'pi/extensions/efficiency/README.md', 'skills/pi-maintenance/SKILL.md', 'skills/schlep/SKILL.md'];
   const files = await Promise.all(paths.map(path => readFile(new URL(path, root), 'utf8')));
   assert.ok(Buffer.byteLength(files[1]) < 2500, 'global instructions budget');
   const owned = [...new Set(execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', 'README.md', ':(glob)pi/**/*.md'], { cwd: root, encoding: 'utf8' }).split('\0').filter(Boolean))];

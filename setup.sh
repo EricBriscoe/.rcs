@@ -69,7 +69,7 @@ link_resource "$REPO/sqlfluff" "$config_home/sqlfluff" sqlfluff
 say "Installing Pi and linking its settings"
 "$REPO/setup-pi.sh"
 
-say "Linking shared instructions for installed harnesses"
+say "Linking shared instructions and skills for installed harnesses"
 # Claude's native installer uses ~/.local/bin, even before the new zshrc loads.
 export PATH="$HOME/.local/bin:$PATH"
 if command -v codex >/dev/null 2>&1; then
@@ -77,11 +77,22 @@ if command -v codex >/dev/null 2>&1; then
     "$HOME/.codex/envs/work" "$HOME/.codex/envs/personal"; do
     link_resource "$REPO/AGENTS.md" "$directory/AGENTS.md" codex-instructions
   done
+  # Account homes share ~/.codex/skills wholesale (see _codex_account in zshrc).
+  for directory in "$HOME/.codex" "${CODEX_HOME:-$HOME/.codex}"; do
+    for skill in "$REPO"/skills/*/; do
+      skill="$(basename "$skill")"
+      link_resource "$REPO/skills/$skill" "$directory/skills/$skill" codex-skill
+    done
+  done
 fi
 if command -v claude >/dev/null 2>&1; then
   for directory in "$HOME/.claude" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" \
     "$HOME/.claude/envs/work" "$HOME/.claude/envs/personal"; do
     link_resource "$REPO/AGENTS.md" "$directory/CLAUDE.md" claude-instructions
+    for skill in "$REPO"/skills/*/; do
+      skill="$(basename "$skill")"
+      link_resource "$REPO/skills/$skill" "$directory/skills/$skill" claude-skill
+    done
   done
 fi
 

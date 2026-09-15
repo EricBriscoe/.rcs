@@ -13,7 +13,7 @@ vim.g.lazyvim_prettier_needs_config = true
 -- monorepo (or a worktree of one) work from the repository, not a package.
 vim.g.root_spec = { { ".git" }, "lsp", "cwd" }
 
--- Four-space indentation matches the tools used at work (ruff, biome,
+-- Four-space indentation matches the usual formatter defaults (ruff, biome,
 -- sqlfluff, shfmt); Lua is set to two in autocmds.lua to match stylua.
 local opt = vim.opt
 opt.shiftwidth = 4
