@@ -77,3 +77,24 @@ test('an appended conversation is not a divergence when only the prompt changed'
   const result = diagnoseCacheDrop(previous, fingerprintRequest(grown), { gapMs: 1000 });
   assert.equal(result.cause, 'system-prompt');
 });
+
+test('a system prompt change names the injected sections that appeared or vanished', () => {
+  const full = 'BASE PROMPT\n<available_skills>...</available_skills>\n# First-visit code navigation setup\nroot\n\n## Memory\n(snapshot)\n# Memory\nnotes\n<chrome-profile-bridge>\nprimer\n</chrome-profile-bridge>';
+  const previous = fingerprintRequest({ ...payload, instructions: full });
+  const stripped = fingerprintRequest({ ...payload, instructions: 'BASE PROMPT\n<available_skills>...</available_skills>' });
+  const result = diagnoseCacheDrop(previous, stripped, { gapMs: 3000 });
+  assert.equal(result.cause, 'system-prompt');
+  assert.match(result.summary, /removed: code-navigation, memory, chrome/);
+  const added = diagnoseCacheDrop(stripped, previous, { gapMs: 3000 });
+  assert.match(added.summary, /added: code-navigation, memory, chrome/);
+  const same = fingerprintRequest({ ...payload, instructions: full + ' tail' });
+  assert.match(diagnoseCacheDrop(previous, same, { gapMs: 3000 }).summary, /system prompt changed \(\+5 chars\)$/);
+});
+
+test('every changed component is reported, not only the first', () => {
+  const previous = fingerprintRequest(payload);
+  const both = clone(payload); both.instructions = 'SYSTEM PROMPT!!'; both.tools = tools.slice(0, 1);
+  const result = diagnoseCacheDrop(previous, fingerprintRequest(both), { gapMs: 3000 });
+  assert.equal(result.cause, 'system-prompt');
+  assert.match(result.summary, /system prompt changed \(\+2 chars\); tools changed: -bash/);
+});

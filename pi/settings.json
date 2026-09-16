@@ -40,6 +40,11 @@
       "rollingWindow": 3,
       "stripFinalAssistantThinking": true,
       "fuseRangeSummary": true
+    },
+    "purgeErrors": {
+      "enabled": false,
+      "cooldownTurns": 2,
+      "minArgChars": 500
     }
   },
   "subagents": {

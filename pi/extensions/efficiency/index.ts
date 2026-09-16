@@ -7,6 +7,7 @@ import { filterFor, groupedGrep, quietTests, runFilter, saveRaw, originalOutput,
 import { privateDirectory, recordUsage, recordOutput, usageReport, formatReport } from "./usage.ts";
 import { fingerprintRequest, diagnoseCacheDrop, isCacheDrop, type RequestFingerprint } from "./cache.ts";
 import { idleCompactionDecision, idleCompactionSettings } from "./idle.ts";
+import { pinInstructions } from "./pin.ts";
 import { readFileSync } from "node:fs";
 
 export default function (pi: ExtensionAPI) {
@@ -69,8 +70,25 @@ export default function (pi: ExtensionAPI) {
   });
   // Cache diagnostics: explain a prompt-cache drop by what changed in the request that hit it.
   let lastFingerprint: RequestFingerprint | undefined, pendingFingerprint: RequestFingerprint | undefined, lastContext = 0, lastSentAt = 0, pendingSentAt = 0;
+  // Prompt pinning (see pin.ts): a prompt produced by before_agent_start is the reference; a
+  // mid-run prompt that is the reference minus its tail lost extension additions, so restore it.
+  let referenceInstructions: string | undefined, promptFresh = false;
+  pi.on("before_agent_start", () => { promptFresh = true; });
   pi.on("before_provider_request", (event) => {
-    try { pendingFingerprint = fingerprintRequest(event.payload); pendingSentAt = Date.now(); } catch { pendingFingerprint = undefined; }
+    let payload = event.payload;
+    try {
+      if (typeof payload?.instructions === "string") {
+        const pinned = pinInstructions({ fresh: promptFresh, reference: referenceInstructions, current: payload.instructions });
+        promptFresh = false;
+        referenceInstructions = pinned.instructions;
+        if (pinned.restored) {
+          payload = { ...payload, instructions: pinned.instructions };
+          pi.appendEntry("cache-prompt-restored", { restoredChars: pinned.instructions.length - event.payload.instructions.length });
+        }
+      }
+      pendingFingerprint = fingerprintRequest(payload); pendingSentAt = Date.now();
+    } catch { pendingFingerprint = undefined; }
+    return payload === event.payload ? undefined : payload;
   });
   pi.on("message_end", (event, ctx) => {
     const message = event.message;

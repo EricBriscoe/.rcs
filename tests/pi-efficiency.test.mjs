@@ -69,7 +69,8 @@ test('RTK pipe has isolated environment/stdin, bounded errors and cancellation',
   process.env.PI_EFFICIENCY_SECRET_FIXTURE = 'not-for-rtk';
   t.after(() => { if (previous === undefined) delete process.env.PI_EFFICIENCY_SECRET_FIXTURE; else process.env.PI_EFFICIENCY_SECRET_FIXTURE = previous; });
   const home = join(root, 'isolated');
-  const result = JSON.parse(await runFilter(script, 'git-diff', 'unchanged stdin\n', home, signal()));
+  // The fixture is a full Node process standing in for the native RTK binary; give it more than RTK's 2s bound so a slow start is not mistaken for RTK being unavailable.
+  const result = JSON.parse(await runFilter(script, 'git-diff', 'unchanged stdin\n', home, signal(), 15000));
   assert.deepEqual(result.args, ['pipe', '--filter', 'git-diff']);
   assert.equal(result.s, 'unchanged stdin\n'); assert.equal(result.home, home); assert.equal(result.cwd, await import('node:fs/promises').then(fs => fs.realpath(home)));
   assert.equal(result.telemetry, '1'); assert.equal(result.toml, '1'); assert.equal(result.privateEnv, null);

@@ -74,7 +74,8 @@ export function quietTests(command: string, raw: string): string | undefined {
   const lines = raw.split("\n").filter(line => { if (pattern.test(line)) { omitted++; return false; } return true; });
   return omitted ? `${lines.join("\n").trim()}\n[${omitted} passing test lines omitted]` : undefined;
 }
-export async function runFilter(binary: string, filter: string, raw: string, home: string, signal: AbortSignal): Promise<string> {
+/** `timeoutMs` bounds the native RTK binary (2s by default); tests substituting a slower stand-in pass a larger budget. */
+export async function runFilter(binary: string, filter: string, raw: string, home: string, signal: AbortSignal, timeoutMs = 2000): Promise<string> {
   signal.throwIfAborted();
   privateDirectory(home);
   return new Promise((resolve, reject) => {
@@ -86,7 +87,7 @@ export async function runFilter(binary: string, filter: string, raw: string, hom
     }, stdio: ["pipe", "pipe", "pipe"] });
     let output = Buffer.alloc(0), failed = false;
     const stop = () => { failed = true; child.kill("SIGKILL"); };
-    const timer = setTimeout(stop, 2000);
+    const timer = setTimeout(stop, timeoutMs);
     signal.addEventListener("abort", stop, { once: true });
     child.on("spawn", () => { if (signal.aborted) stop(); });
     child.on("error", () => { failed = true; });
