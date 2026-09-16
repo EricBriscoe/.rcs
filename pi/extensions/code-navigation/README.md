@@ -6,7 +6,7 @@
 
 ## Setup
 
-The first agent turn in a trusted project requests assessment of **all relevant languages/subprojects**, including unfamiliar/extensionless source. No startup model call or delegated agent. Configure useful servers, verify representative queries, then `assess`; explicitly explain unsupported/unnecessary languages. Inventory is a heuristic, not proof of coverage.
+The first agent turn in a trusted project requests assessment of **all relevant languages/subprojects**, including unfamiliar/extensionless source. No startup model call or delegated agent. The injected block is byte-stable (root path only) so the cached prompt prefix survives file changes; the live inventory comes from `code_nav status`. Configure useful servers, verify representative queries, then `assess`; explicitly explain unsupported/unnecessary languages. Inventory is a heuristic, not proof of coverage.
 
 `/code-nav` shows status; `/code-nav reassess` resets assessment. Tool actions: `status`, `setup` with a `recipe`, `configure` for custom stdio servers, `assess` with `summary`/`skipped`, and `remove`. `directory` supports subprojects; most-specific matching server wins. Select `server` for ambiguous workspace searches.
 

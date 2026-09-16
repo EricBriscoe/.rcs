@@ -15,9 +15,19 @@ const agentDir = process.env.PI_CODING_AGENT_DIR || join(homedir(), '.pi/agent')
 const npmRoot = join(agentDir, 'npm');
 const installed = join(npmRoot, 'node_modules/pi-subagents');
 
-test('replacement tracks upstream updates without role pins or a model allowlist', async () => {
+test('replacement tracks upstream updates with cost-tiered roles and no model allowlist', async () => {
   assert.ok(settings.packages.includes('npm:pi-subagents'));
-  assert.equal(settings.subagents, undefined);
+  // Subscription usage is dominated by input context; children default to cheaper Codex
+  // tiers and only judgment roles inherit the parent (Astra) model.
+  assert.deepEqual(settings.subagents, {
+    defaultModel: 'openai-codex/gpt-5.6-terra', defaultThinking: 'medium',
+    agentOverrides: {
+      scout: { model: 'openai-codex/gpt-5.6-luna', thinking: 'low' },
+      researcher: { model: 'openai-codex/gpt-5.6-luna', thinking: 'medium' },
+      reviewer: { model: 'inherit' }, oracle: { model: 'inherit' },
+    },
+  });
+  assert.equal(settings.subagents.modelScope, undefined, 'no model allowlist');
   assert.equal(settings.enabledModels, undefined);
   for (const path of ['pi/extensions/orchestrate', 'pi/orchestrator.json']) assert.equal(existsSync(new URL(path, checkout)), false);
 });
@@ -40,7 +50,7 @@ test('long-run policy keeps monitoring advisory and documents stock limits', asy
   assert.match(policy, /72 hours is a hard deadline, not unlimited/);
 });
 
-test('installed pi-subagents loads long-run settings via standard discovery in both Pi distributions, without role/model restrictions', { timeout: 60000 }, async t => {
+test('installed pi-subagents loads long-run settings and cost-tiered roles via standard discovery in both Pi distributions', { timeout: 60000 }, async t => {
   assert.ok(existsSync(join(installed, 'index.ts')), 'Run setup-pi.sh to install the declared Pi package first');
   const metadata = JSON.parse(await readFile(join(installed, 'package.json'), 'utf8'));
   assert.equal(`npm:${metadata.name}`, settings.packages[0]);
@@ -95,11 +105,10 @@ export default function(pi) { pi.registerCommand('replacement-probe', { handler:
       for (const tool of ['subagent', 'bg_wait', 'subagent_supervisor']) assert.ok(result.tools.includes(tool), tool);
       for (const command of ['subagents-guide', 'subagents-fleet', 'subagents-models', 'subagents-doctor']) assert.ok(result.commands.includes(command), command);
       assert.ok(!result.commands.includes('orchestrate'));
-      for (const name of ['scout', 'worker']) {
-        const agent = result.agents.find(a=>a.name===name);
-        assert.ok(agent, name);
-        assert.ok(!agent.model || agent.model === 'inherit', `${name} is not pinned to a fixed model`);
-      }
+      const scout = result.agents.find(a=>a.name==='scout'), worker = result.agents.find(a=>a.name==='worker');
+      assert.ok(scout && worker, 'builtin scout and worker discovered');
+      assert.equal(scout.model, 'openai-codex/gpt-5.6-luna', 'scout is routed to the cheapest tier');
+      assert.ok([undefined, 'inherit', 'openai-codex/gpt-5.6-terra'].includes(worker.model), `worker uses the Terra default, got ${worker.model}`);
       assert.ok(result.skills.length > 0, 'stock package skills load without custom filtering');
     });
   }

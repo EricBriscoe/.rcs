@@ -14,6 +14,8 @@ Quota reads use Codex’s `GET /backend-api/wham/usage` with account OAuth heade
 
 Re-login preserves the account’s label, priority, enablement, cooldown, and quota. To change account identity, remove it and add a new account.
 
+While enabled, the pool also owns pi-ai's `openai-codex-responses` API entry, so bare `stream()`/`complete()` calls from other extensions (pi-condense summaries, custom compaction) use pool accounts instead of the stock `/login` credential; disabling restores the built-in implementation.
+
 Failover occurs only before a stream starts and only for an original structured Codex 429 quota response. It never retries partial output, tool calls, network errors, authentication failures, throttling, or model-access failures. Pool requests use Codex SSE so the adapter can retain that structured pre-start evidence. A failover gets a fresh account-scoped session/cache namespace. Response provenance is persisted as a non-secret account hash; opaque reasoning/response metadata from another or unknown account is removed while preserving transcript and tool-result pairing. The installed public Codex API has no per-account model-discovery endpoint, so server acceptance of the selected normal model request is the conservative access validation.
 
 Passive official headers retain omitted quota windows.

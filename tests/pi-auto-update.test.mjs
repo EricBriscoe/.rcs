@@ -161,7 +161,7 @@ test('all configured unpinned npm packages update, including scoped and filtered
 test('shipped package sources preserve the stock memory pin and Bigpowers resource filters', async () => {
   const settings = JSON.parse(await readFile(new URL('../pi/settings.json', import.meta.url), 'utf8'));
   const sources = settings.packages.map(entry => typeof entry === 'string' ? entry : entry.source);
-  assert.deepEqual(sources, ['npm:pi-subagents', 'npm:pi-mcp-adapter', 'npm:pi-vim', 'npm:pi-chrome', 'npm:bigpowers', 'npm:pi-context-view', 'npm:pi-memory@0.4.2']);
+  assert.deepEqual(sources, ['npm:pi-subagents', 'npm:pi-mcp-adapter', 'npm:pi-vim', 'npm:pi-chrome', 'npm:bigpowers', 'npm:pi-context-view', 'npm:pi-memory@0.4.2', 'npm:pi-condense']);
   assert.deepEqual(settings.packages.find(entry => entry.source === 'npm:bigpowers'), { source: 'npm:bigpowers', extensions: [], themes: [] });
 });
 

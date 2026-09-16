@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
-import { getModels, openAICodexResponsesApi } from "@earendil-works/pi-ai/compat";
+import { getModels, openAICodexResponsesApi, getApiProvider, registerApiProvider } from "@earendil-works/pi-ai/compat";
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
 import type { AssistantMessage, Context, Model, Provider, SimpleStreamOptions } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -19,6 +19,19 @@ import { completePoolArguments, loginWithRecovery } from "./auth-ui.mjs";
 const PROVIDER_ID = "openai-codex";
 const stockModels = getModels(PROVIDER_ID);
 const stockAdapter = openAICodexResponsesApi();
+// Pi's registered provider override only covers calls made through the model registry.
+// Extensions such as pi-condense call pi-ai's bare stream(), which dispatches on model.api
+// and would otherwise use the stock login. Route that path through the pool as well while it
+// is enabled; the original built-in implementation is kept across /reload via a global.
+const CODEX_API = "openai-codex-responses";
+const STOCK_API_KEY = Symbol.for("codex-account-pool.stock-api-provider");
+const stockApiProvider: any = (globalThis as any)[STOCK_API_KEY] ??= getApiProvider(CODEX_API);
+let poolActive = false;
+registerApiProvider({
+  api: CODEX_API,
+  stream: (model: any, context: any, options?: any) => poolActive ? pooledStream(model, context, options, false) : stockApiProvider.stream(model, context, options),
+  streamSimple: (model: any, context: any, options?: any) => poolActive ? pooledStream(model, context, options, true) : stockApiProvider.streamSimple(model, context, options),
+} as any, "codex-account-pool");
 const stockProvider = builtinProviders().find(provider => provider.id === PROVIDER_ID);
 const officialOAuth = stockProvider?.auth.oauth;
 const responseAccountKeys = new Map<string, string>();
@@ -289,8 +302,8 @@ async function loginAccount(label: string, method: string | undefined, ctx: any,
 
 export default async function (pi: ExtensionAPI) {
   let installed = false;
-  const install = () => { if (!installed) { pi.registerProvider(poolProvider()); installed = true; } };
-  const uninstall = () => { if (installed) { pi.unregisterProvider(PROVIDER_ID); installed = false; } };
+  const install = () => { if (!installed) { pi.registerProvider(poolProvider()); installed = true; } poolActive = true; };
+  const uninstall = () => { if (installed) { pi.unregisterProvider(PROVIDER_ID); installed = false; } poolActive = false; };
   const footer = createFooterController({
     readState: readPoolState,
     statusLine: poolStatusLine,

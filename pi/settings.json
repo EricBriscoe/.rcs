@@ -7,8 +7,15 @@
   "collapseChangelog": true,
   "hideThinkingBlock": true,
   "editorPaddingX": 1,
-  "showCacheMissNotices": false,
+  "showCacheMissNotices": true,
   "lastChangelogVersion": "0.85.1",
+  "compaction": {
+    "keepRecentTokens": 30000
+  },
+  "efficiency": {
+    "idleCompactMinutes": 10,
+    "idleCompactMinTokens": 30000
+  },
   "packages": [
     "npm:pi-subagents",
     "npm:pi-mcp-adapter",
@@ -20,8 +27,31 @@
       "themes": []
     },
     "npm:pi-context-view",
-    "npm:pi-memory@0.4.2"
+    "npm:pi-memory@0.4.2",
+    "npm:pi-condense"
   ],
+  "contextPrune": {
+    "enabled": true,
+    "pruneOn": "agent-message",
+    "summarizerModel": "openai-codex/gpt-5.6-luna",
+    "summarizerThinking": "low",
+    "chainCompression": {
+      "enabled": false,
+      "rollingWindow": 3,
+      "stripFinalAssistantThinking": true,
+      "fuseRangeSummary": true
+    }
+  },
+  "subagents": {
+    "defaultModel": "openai-codex/gpt-5.6-terra",
+    "defaultThinking": "medium",
+    "agentOverrides": {
+      "scout": { "model": "openai-codex/gpt-5.6-luna", "thinking": "low" },
+      "researcher": { "model": "openai-codex/gpt-5.6-luna", "thinking": "medium" },
+      "reviewer": { "model": "inherit" },
+      "oracle": { "model": "inherit" }
+    }
+  },
   "markdown": {
     "mermaid": "streaming"
   },

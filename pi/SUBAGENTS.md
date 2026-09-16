@@ -1,6 +1,6 @@
 # Subagents
 
-Stock [pi-subagents](https://github.com/nicobailon/pi-subagents), unversioned and launch-updated. No custom coordinator, wrapper or fixed role models. `pi --list-models openai` lists candidates, not guaranteed entitlement.
+Stock [pi-subagents](https://github.com/nicobailon/pi-subagents), unversioned and launch-updated. No custom coordinator or wrapper. `pi/settings.json` routes roles by cost on the Codex subscription: `scout`/`researcher` on Luna, everything else on Terra at medium thinking, and `reviewer`/`oracle` inherit the parent model (Astra). No model allowlist; per-run `[model=…]` overrides still work. `pi --list-models openai` lists candidates, not guaranteed entitlement.
 
 - `/subagents-guide`: installed-version docs/workflows.
 - `/subagents-fleet`: inspect, steer, stop children.

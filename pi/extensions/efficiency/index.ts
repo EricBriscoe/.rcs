@@ -5,6 +5,9 @@ import { realpathSync } from "node:fs";
 import { effectiveRtk } from "./runtime.mjs";
 import { filterFor, groupedGrep, quietTests, runFilter, saveRaw, originalOutput, sessionKey } from "./output.ts";
 import { privateDirectory, recordUsage, recordOutput, usageReport, formatReport } from "./usage.ts";
+import { fingerprintRequest, diagnoseCacheDrop, isCacheDrop, type RequestFingerprint } from "./cache.ts";
+import { idleCompactionDecision, idleCompactionSettings } from "./idle.ts";
+import { readFileSync } from "node:fs";
 
 export default function (pi: ExtensionAPI) {
   const agent = getAgentDir(), abort = new AbortController(), pending = new Set<Promise<any>>();
@@ -64,9 +67,52 @@ export default function (pi: ExtensionAPI) {
     void promise.finally(() => pending.delete(promise)).catch(() => {});
     return promise;
   });
+  // Cache diagnostics: explain a prompt-cache drop by what changed in the request that hit it.
+  let lastFingerprint: RequestFingerprint | undefined, pendingFingerprint: RequestFingerprint | undefined, lastContext = 0, lastSentAt = 0, pendingSentAt = 0;
+  pi.on("before_provider_request", (event) => {
+    try { pendingFingerprint = fingerprintRequest(event.payload); pendingSentAt = Date.now(); } catch { pendingFingerprint = undefined; }
+  });
   pi.on("message_end", (event, ctx) => {
     const message = event.message;
-    if (message.role === "assistant") recordUsage(agent, owner(ctx), "foreground", `${message.provider}/${message.model}`, message.usage);
+    if (message.role !== "assistant") return;
+    recordUsage(agent, owner(ctx), "foreground", `${message.provider}/${message.model}`, message.usage);
+    const usage = message.usage ?? {}, cacheRead = usage.cacheRead ?? 0, context = (usage.input ?? 0) + cacheRead + (usage.cacheWrite ?? 0);
+    if (pendingFingerprint && lastFingerprint && isCacheDrop({ previousContext: lastContext, cacheRead })) {
+      const diagnosis = diagnoseCacheDrop(lastFingerprint, pendingFingerprint, { gapMs: Math.max(0, pendingSentAt - lastSentAt) });
+      if (idleCompactedAt > lastSentAt) diagnosis.summary += " (expected: idle compaction ran while the cache was cold)";
+      const rebilled = Math.max(0, (usage.input ?? 0) - Math.max(0, context - lastContext));
+      pi.appendEntry("cache-diagnostic", { ...diagnosis, cacheRead, previousContext: lastContext, context, rebilledTokens: rebilled });
+      if (ctx.hasUI) ctx.ui.notify(`Cache drop (~${Math.round(rebilled / 1000)}K tokens re-read): ${diagnosis.summary}`, "warning");
+    }
+    if (pendingFingerprint) { lastFingerprint = pendingFingerprint; lastSentAt = pendingSentAt; pendingFingerprint = undefined; }
+    if (context > 0) lastContext = context;
+  });
+  // Idle compaction: when the provider cache has expired, run pi-condense chain compaction
+  // so the unavoidable re-read, and every request after it, is smaller.
+  let idleTimer: ReturnType<typeof setTimeout> | undefined, idleCompactedAt = 0;
+  const idleSettings = () => { try { return idleCompactionSettings(JSON.parse(readFileSync(join(agent, "settings.json"), "utf8"))); } catch { return idleCompactionSettings({}); } };
+  const cancelIdle = () => { if (idleTimer) clearTimeout(idleTimer); idleTimer = undefined; };
+  pi.on("agent_start", cancelIdle);
+  pi.on("agent_settled", (_event, ctx) => {
+    cancelIdle();
+    const settings = idleSettings();
+    if (!settings.enabled || abort.signal.aborted) return;
+    const settledAt = Date.now();
+    idleTimer = setTimeout(() => {
+      idleTimer = undefined;
+      if (abort.signal.aborted) return;
+      const decision = idleCompactionDecision({
+        idleMs: Date.now() - settledAt, thresholdMs: settings.thresholdMs, minTokens: settings.minTokens,
+        tokens: ctx.getContextUsage()?.tokens, agentIdle: ctx.isIdle(), pendingMessages: ctx.hasPendingMessages(),
+        prunerAvailable: pi.getCommands().some(command => command.name === "pruner"),
+      });
+      if (!decision.compact) return;
+      idleCompactedAt = Date.now();
+      pi.appendEntry("cache-idle-compact", { reason: decision.reason, tokens: ctx.getContextUsage()?.tokens ?? null });
+      if (ctx.hasUI) ctx.ui.notify(`Idle compaction: ${decision.reason}`, "info");
+      pi.sendUserMessage("/pruner compact", { expandPromptTemplates: true });
+    }, settings.thresholdMs);
+    idleTimer.unref?.();
   });
   pi.on("session_compact", (event, ctx) => recordUsage(agent, owner(ctx), "compaction", `${ctx.model?.provider}/${ctx.model?.id}`, event.compactionEntry.usage, `compact:${event.compactionEntry.id}`));
   pi.on("session_tree", (event, ctx) => {
@@ -88,5 +134,5 @@ export default function (pi: ExtensionAPI) {
       ctx.ui.notify(`Bash/search output: ${enabled ? "auto (RTK/quiet tests/grouped grep, raw fallback)" : "raw"}.`, "info");
     },
   });
-  pi.on("session_shutdown", async () => { abort.abort(); await Promise.allSettled([...pending]); });
+  pi.on("session_shutdown", async () => { cancelIdle(); abort.abort(); await Promise.allSettled([...pending]); });
 }

@@ -93,6 +93,7 @@ class PiSetupTests(unittest.TestCase):
             (self.efficiency_extension, REPO / "pi/extensions/efficiency"),
             (self.briefing_extension, REPO / "pi/extensions/model-briefing"),
             (self.agent_dir / "extensions/appearance", REPO / "pi/extensions/appearance"),
+            (self.agent_dir / "extensions/tool-loader", REPO / "pi/extensions/tool-loader"),
             (self.agent_dir / "themes/quiet-graphite.json", REPO / "pi/themes/quiet-graphite.json"),
             (self.agent_dir / "themes/paper.json", REPO / "pi/themes/paper.json"),
             (self.launcher, REPO / "pi/launch.mjs"),
@@ -216,14 +217,15 @@ class PiSetupTests(unittest.TestCase):
         self.assertEqual(backups[0].read_text(), previous)
         self.assertEqual(sibling.read_text(), '{"local": true}\n')
 
-    def test_astra_compaction_budget_is_model_specific(self):
+    def test_codex_models_keep_the_272k_short_context_tier(self):
+        # Pi's built-in Codex catalog compacts before OpenAI's 272K long-context surcharge;
+        # a larger contextWindow override doubles input rates for every request above it.
         models = json.loads((REPO / "pi/models.json").read_text())
-        self.assertEqual(models, {"providers": {"openai-codex": {"modelOverrides": {
-            "gpt-6-astra": {"contextWindow": 416384},
-        }}}})
+        # Pi rejects a provider entry with an empty modelOverrides, so no entry at all.
+        self.assertEqual(models, {"providers": {}})
         settings = json.loads((REPO / "pi/settings.json").read_text())
-        reserve = settings.get("compaction", {}).get("reserveTokens", 16384)
-        self.assertEqual(416384 - reserve, 400000)
+        self.assertEqual(settings["compaction"], {"keepRecentTokens": 30000})
+        self.assertTrue(settings["showCacheMissNotices"])
 
     def test_existing_models_are_backed_up_once(self):
         models = self.agent_dir / "models.json"
@@ -363,6 +365,8 @@ class PiSetupTests(unittest.TestCase):
             "pi", "install", "npm:pi-context-view",
             "npm_config_ignore_scripts=true",
             "pi", "install", "npm:pi-memory@0.4.2",
+            "npm_config_ignore_scripts=true",
+            "pi", "install", "npm:pi-condense",
             "npm_config_ignore_scripts=true",
             "update-deps",
         ])

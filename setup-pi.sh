@@ -77,7 +77,7 @@ link_resource "$REPO/AGENTS.md" "$pi_agent_dir/AGENTS.md" instructions
 link_resource "$REPO/pi/SUBAGENTS.md" "$pi_agent_dir/SUBAGENTS.md" instructions
 link_resource "$REPO/pi/subagents.json" "$pi_agent_dir/extensions/subagent/config.json" subagent-config
 # Keep sibling names identical to the checkout for relative extension imports.
-for extension in web ask-user monitor project-context code-navigation efficiency codex-account-pool appearance model-briefing; do
+for extension in web ask-user monitor project-context code-navigation efficiency codex-account-pool appearance model-briefing tool-loader; do
   source="$REPO/pi/extensions/$extension"
   link_resource "$source" "$pi_agent_dir/extensions/$extension" extension
   # Retire only our old prefixed link; preserve user-owned replacements.

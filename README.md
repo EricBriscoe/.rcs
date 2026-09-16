@@ -22,6 +22,8 @@ Pi setup installs Node ≥22.19, ripgrep, fd, Pi, Playwright/Chromium, checksum-
 
 On each Mac, `/login openai-codex` uses your subscription; credentials stay local. `/model` or `/thinking`, then Ctrl+S, saves defaults through the settings symlink. Push authorized commits; Pi pulls on launch.
 
+Subscription usage is almost entirely input context, so the harness keeps the prompt prefix cacheable: Codex models stay on Pi's 272K context window (compaction before OpenAI's long-context surcharge), subagents default to Terra/Luna with Astra reserved for `reviewer`/`oracle`, and cache-miss notices are on. One habit matters: prefer `/chrome authorize indefinite` over repeated 15-minute grants (each grant/expiry changes the prompt). Breaks are handled for you: after ten idle minutes the efficiency extension runs pi-condense chain compaction, since the provider cache is gone either way ([details](pi/extensions/efficiency/README.md)).
+
 ## Pi
 
 Vim prompt editing is enabled: `Esc` enters Normal mode; `i` returns to Insert. Motions, text objects, visual mode, `u` undo, and `Ctrl+r` redo work. In Normal mode, `:codex-pool` opens account settings.
@@ -34,6 +36,8 @@ The Pi launcher pulls `.rcs` before updating dependencies and unpinned npm packa
 | File/code search | Native search plus read-only LSP/ast-grep. `/code-nav [reassess]`. [Guide](pi/extensions/code-navigation/README.md) |
 | Quiet output / RTK | Filtered output; raw artifacts retained. `/output raw\|auto`, `/tokens [all]`. [Guide](pi/extensions/efficiency/README.md) |
 | Context inspector | `/context usage` and `/context injections` inspect prompt/tool overhead without adding model tools. [Upstream](https://github.com/dimk90/pi-context-view) |
+| Context pruning | Stock [pi-condense](https://github.com/mjakl/pi-condense) summarizes finished tool-call batches with Luna once per agent reply; originals stay recoverable via `context_tree_query`. Chain compression is off: it rewrote old turns on every reply, which re-read the whole transcript for a few K tokens of savings. `/pruner status\|now\|off`. |
+| Tool loader | Delegation tools (`subagent`, `bg_wait`, `subagent_supervisor`) stay out of the prompt prefix until the model calls `load_tools`. [Guide](pi/extensions/tool-loader/README.md) |
 | Memory | Stock [pi-memory](https://github.com/jayzeng/pi-memory): daily logs, long-term notes and scratchpad in `~/.pi/agent/memory/`. `memory_status` reports health; setup installs `qmd` via npm if missing from PATH. Restart Pi to auto-create the search collection. |
 | Subagents | Stock delegation, workflows, fleet, and worktrees. `/subagents-guide`, `/subagents-fleet`, `/subagents-models`. [Setup](pi/SUBAGENTS.md) |
 | Bigpowers | Skills/prompts only; hooks disabled. `/skill:using-bigpowers`. Project provisioning (`bigpowers init`) is opt-in. |

@@ -74,6 +74,20 @@ test('native first-visit instructions assess every relevant language, persist co
   await f.command('reassess'); assert.ok(f.notices.some(([text]) => /next agent turn/.test(text)));
 });
 
+test('first-visit prompt stays byte-stable while files change and keeps the inventory in the tool result', async t => {
+  const f = await fixture(t);
+  await writeFile(join(f.cwd, 'main.ts'), 'function alpha() {}\n');
+  const first = (await f.emit('before_agent_start', { systemPrompt: 'BASE' })).systemPrompt;
+  await writeFile(join(f.cwd, 'extra.py'), 'def new_language(): pass');
+  await writeFile(join(f.cwd, 'notes.md'), 'docs');
+  const second = (await f.emit('before_agent_start', { systemPrompt: 'BASE' })).systemPrompt;
+  assert.equal(second, first, 'prompt prefix must not change as the workspace changes');
+  assert.doesNotMatch(first, /"inventory"|"examples"|main\.ts/);
+  assert.match(first, /First-visit code navigation setup/);
+  const status = JSON.parse((await f.tool({ action: 'status' })).content[0].text);
+  assert.ok(status.inventory['.py'], 'inventory remains available through code_nav status');
+});
+
 test('pin changes and missing executables invalidate a completed assessment', async t => {
   const f = await fixture(t), localServer = join(f.root, 'custom-lsp.mjs');
   await cp(server, localServer);
