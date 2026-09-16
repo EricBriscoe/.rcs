@@ -8,6 +8,7 @@ import { privateDirectory, recordUsage, recordOutput, usageReport, formatReport 
 import { fingerprintRequest, diagnoseCacheDrop, isCacheDrop, type RequestFingerprint } from "./cache.ts";
 import { idleCompactionDecision, idleCompactionSettings } from "./idle.ts";
 import { pinInstructions } from "./pin.ts";
+import { externalUsageDelta, summarizerModel, nonNegativeTotal, type ExternalUsageTotals } from "./external.ts";
 import { readFileSync } from "node:fs";
 
 export default function (pi: ExtensionAPI) {
@@ -151,6 +152,22 @@ export default function (pi: ExtensionAPI) {
       else if (args.trim()) { ctx.ui.notify("Use /output [auto|raw]", "warning"); return; }
       ctx.ui.notify(`Bash/search output: ${enabled ? "auto (RTK/quiet tests/grouped grep, raw fallback)" : "raw"}.`, "info");
     },
+  });
+  // External usage (see external.ts): pi-condense publishes cumulative summarizer cost on the
+  // extension event bus; persist per-flush deltas so transcript readers can count them.
+  const externalTotals = new Map<string, ExternalUsageTotals>();
+  let sessionModel: { provider?: string; id?: string } | undefined;
+  pi.on("session_start", (_event, ctx) => { externalTotals.clear(); sessionModel = ctx.model ?? undefined; });
+  pi.on("model_select", (event: any) => { if (event?.model) sessionModel = event.model; });
+  pi.events.on("cost:external", (update: any) => {
+    const source = typeof update?.source === "string" ? update.source : "unknown";
+    const delta = externalUsageDelta(externalTotals.get(source), update ?? {});
+    externalTotals.set(source, { input: nonNegativeTotal(update?.inputTokens), output: nonNegativeTotal(update?.outputTokens), cost: nonNegativeTotal(update?.totalCost) });
+    if (delta.input + delta.output === 0) return;
+    let settings: any = {};
+    try { settings = JSON.parse(readFileSync(join(agent, "settings.json"), "utf8")); } catch { /* defaults */ }
+    const { provider, model } = summarizerModel(settings, sessionModel);
+    pi.appendEntry("external-usage", { source, provider, model, usage: { input: delta.input, output: delta.output, cacheRead: 0, cacheWrite: 0, cost: delta.cost } });
   });
   pi.on("session_shutdown", async () => { cancelIdle(); abort.abort(); await Promise.allSettled([...pending]); });
 }
