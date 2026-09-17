@@ -6,12 +6,15 @@ import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
 import type { AssistantMessage, Context, Model, Provider, SimpleStreamOptions } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { SettingsManager } from "@earendil-works/pi-coding-agent";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import {
-  allExhaustedMessage, eligibleAccounts, isModelAccessError, isPoolAccountUnavailable, loginAndAdd,
-  loginAndReplace, markExhausted, quotaResetAt, readPoolState, shouldFailover, resolveAccount,
+  allExhaustedMessage, isModelAccessError, isPoolAccountUnavailable, loginAndAdd,
+  loginAndReplace, markExhausted, poolStatePath, quotaResetAt, readPoolState, shouldFailover, resolveAccount,
   statusSummary, updatePoolState,
 } from "./pool.mjs";
 import { compactQuota, formatQuota, normalizeQuotaPayload, mergeQuotaHeaders } from "./quota.mjs";
+import { cacheWindowMs, createRouter } from "./routing.mjs";
 import { createFooterController } from "./footer.mjs";
 import { openPoolMenu, POOL_HELP } from "./menu.mjs";
 import { completePoolArguments, loginWithRecovery } from "./auth-ui.mjs";
@@ -41,6 +44,14 @@ let refreshFooter: (() => void) | undefined;
 
 function accountKey(accountId: string) {
   return createHash("sha256").update(accountId).digest("hex");
+}
+
+// Sticky while the provider cache is warm; headroom ranking decides at cold boundaries.
+const router = createRouter({ keyOf: accountKey });
+
+function agentSettings() {
+  try { return JSON.parse(readFileSync(join(dirname(dirname(poolStatePath())), "settings.json"), "utf8")); }
+  catch { return {}; }
 }
 
 function safeAuthenticationError() {
@@ -113,7 +124,7 @@ function pooledStream(model: Model<any>, context: Context, options: any = {}, si
   const stream = createAssistantMessageEventStream();
   void (async () => {
     const initial = await readPoolState();
-    const candidates = eligibleAccounts(initial);
+    const candidates = router.order(initial);
     if (candidates.length === 0) {
       for await (const event of errorStream(model, allExhaustedMessage(initial))) stream.push(event);
       stream.end();
@@ -167,8 +178,11 @@ function pooledStream(model: Model<any>, context: Context, options: any = {}, si
           ? stockAdapter.streamSimple(model as any, input, attemptOptions)
           : stockAdapter.stream(model as any, input, attemptOptions);
         for await (const event of inner) {
-          if (event.type === "start") started = true;
-          if (event.type === "done" && event.message.responseId) responseAccountKeys.set(event.message.responseId, accountKey(account.accountId));
+          if (event.type === "start") { started = true; router.served(account.accountId); }
+          if (event.type === "done") {
+            router.served(account.accountId);
+            if (event.message.responseId) responseAccountKeys.set(event.message.responseId, accountKey(account.accountId));
+          }
           if (event.type !== "error" || started) {
             stream.push(event);
             if (event.type === "error" || event.type === "done") { stream.end(); return; }
@@ -254,7 +268,7 @@ async function refreshQuota(accountId: string, signal?: AbortSignal) {
 }
 
 function poolStatusLine(state: Awaited<ReturnType<typeof readPoolState>>) {
-  const active = eligibleAccounts(state)[0];
+  const active = router.order(state)[0];
   return active ? `Codex pool: ${active.label} ${compactQuota(active.quota)}` : `Codex pool: ${allExhaustedMessage(state)}`;
 }
 
@@ -442,6 +456,9 @@ export default async function (pi: ExtensionAPI) {
       const data = entry.data as { responseId?: unknown; accountKey?: unknown };
       if (typeof data.responseId === "string" && typeof data.accountKey === "string" && data.accountKey.length === 64) responseAccountKeys.set(data.responseId, data.accountKey);
     }
+    // A resumed session keeps its warm account instead of re-ranking.
+    router.setWindow(cacheWindowMs(agentSettings()));
+    router.restore(ctx.sessionManager.getEntries(), responseAccountKeys);
     await updateFooter(ctx);
     const state = await readPoolState();
     if ((!ctx.model || ctx.model.provider === "unknown") && !state.enabled && state.accounts.length) {

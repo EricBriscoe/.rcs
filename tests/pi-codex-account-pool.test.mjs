@@ -8,11 +8,12 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 
 import {
-  addAccount, eligibleAccounts, emptyState, isModelAccessError, loginAndAdd,
-  isQuotaExhaustion, markExhausted, quotaResetAt, readPoolState, replaceAccountCredentials,
+  accountHeadroom, addAccount, eligibleAccounts, emptyState, isModelAccessError, loginAndAdd,
+  isQuotaExhaustion, markExhausted, quotaResetAt, rankedAccounts, readPoolState, replaceAccountCredentials,
   resolveAccount, shouldFailover, updatePoolState,
 } from "../pi/extensions/codex-account-pool/pool.mjs";
-import { compactQuota, formatQuota, normalizeQuotaPayload, QUOTA_STALE_AFTER_MS, quotaFreshness } from "../pi/extensions/codex-account-pool/quota.mjs";
+import { bindingWindow, compactQuota, formatQuota, normalizeQuotaPayload, QUOTA_STALE_AFTER_MS, quotaFreshness, quotaHeadroom } from "../pi/extensions/codex-account-pool/quota.mjs";
+import { cacheWindowMs, createRouter } from "../pi/extensions/codex-account-pool/routing.mjs";
 import { createFooterController, MAX_TIMER_DELAY_MS, nextFooterUpdateMs } from "../pi/extensions/codex-account-pool/footer.mjs";
 
 const exec = promisify(execFile);
@@ -78,10 +79,72 @@ test("quota displays official usage windows without token-budget inference", () 
   assert.equal(quota.ordinaryUsageAllowed, true);
   assert.deepEqual(quota.windows.map(window => window.limitId), ["codex", "codex_other"]);
   assert.match(formatQuota(quota, 1_699_999_001_000), /58% left.*95% left.*20% left/);
-  assert.match(compactQuota(quota, 1_699_999_001_000), /58% left/);
+  assert.match(compactQuota(quota, 1_699_999_001_000), /^20% left \(1m\) · 2023-11-15T01:00:00\.000Z$/, "compact line names the tightest window");
   assert.deepEqual(quotaFreshness(undefined), { state: "unknown" });
   assert.match(formatQuota(quota, 1_700_000_000_001), /stale/);
   assert.doesNotMatch(formatQuota(quota), /token|budget/i);
+});
+
+test("headroom is the tightest window across every limit; limit-reached is zero; unknown is full", () => {
+  const quota = { fetchedAt: 1, windows: [
+    { limitId: "codex", primary: { usedPercent: 30, windowDurationMins: 300, resetsAt: 10 }, secondary: { usedPercent: 62, windowDurationMins: 10_080, resetsAt: 20 } },
+    { limitId: "codex_other", label: "Other", primary: { usedPercent: 10 } },
+  ] };
+  assert.deepEqual(bindingWindow(quota), { percent: 38, name: "7d", resetsAt: 20 });
+  assert.equal(quotaHeadroom(quota), 38);
+  assert.equal(quotaHeadroom(undefined), undefined);
+  assert.equal(quotaHeadroom({ fetchedAt: 1, windows: [] }), undefined);
+  assert.equal(quotaHeadroom({ fetchedAt: 1, windows: [{ limitId: "codex", limitReached: true, primary: { usedPercent: 40 } }] }), 0);
+  assert.equal(quotaHeadroom({ fetchedAt: 1, windows: [{ limitId: "codex", allowed: false, primary: { usedPercent: 0 } }] }), 0);
+  assert.deepEqual(bindingWindow({ fetchedAt: 1, windows: [{ limitId: "codex_x", label: "X", primary: { usedPercent: 5 } }] }), { percent: 95, name: "X primary", resetsAt: undefined });
+  assert.equal(accountHeadroom({ quota }), 38);
+  assert.equal(accountHeadroom({}), 100, "an account with no usage data counts as full");
+  assert.match(compactQuota({ fetchedAt: Date.now(), windows: [{ limitId: "codex", limitReached: true, primary: { usedPercent: 100, resetsAt: 1_700_000_000 } }] }), /^0% left \(codex limit reached\) · 2023-11-14T22:13:20\.000Z$/);
+});
+
+test("ranked routing prefers headroom, probes unknown accounts, keeps exhausted ones out, and breaks ties by priority", () => {
+  const usage = (percent, extra = {}) => ({ fetchedAt: 1, windows: [{ limitId: "codex", primary: { usedPercent: 100 - percent }, secondary: { usedPercent: 0 }, ...extra }] });
+  const state = { version: 1, enabled: true, accounts: [
+    { ...account("low"), quota: usage(20) },
+    { ...account("high"), quota: usage(70) },
+    { ...account("fresh") },
+    { ...account("tied-later"), quota: usage(70) },
+    { ...account("exhausted"), quota: usage(90), exhausted: true, resetAt: Number.MAX_SAFE_INTEGER },
+    { ...account("off"), quota: usage(99), enabled: false },
+  ] };
+  assert.deepEqual(rankedAccounts(state, 5).map(value => value.label), ["fresh", "high", "tied-later", "low"]);
+  assert.deepEqual(rankedAccounts({ ...state, enabled: false }, 5), []);
+  assert.deepEqual(eligibleAccounts(state, 5).map(value => value.label), ["low", "high", "fresh", "tied-later"], "eligibility keeps priority order for callers that need it");
+});
+
+test("router sticks to the warm account, re-ranks at cold boundaries, and restores from session entries", () => {
+  const usage = percent => ({ fetchedAt: 1, windows: [{ limitId: "codex", primary: { usedPercent: 100 - percent } }] });
+  const state = { version: 1, enabled: true, accounts: [{ ...account("a"), quota: usage(40) }, { ...account("b"), quota: usage(90) }] };
+  const router = createRouter({ cacheWindowMs: 10 * 60_000, keyOf: id => `key-${id}` });
+  assert.deepEqual(router.order(state, 1_000).map(value => value.label), ["b", "a"], "first request goes to the most headroom");
+  router.served("a", 1_000);
+  assert.deepEqual(router.order(state, 1_000 + 9 * 60_000).map(value => value.label), ["a", "b"], "warm cache keeps the serving account first despite less headroom");
+  assert.deepEqual(router.order(state, 1_000 + 10 * 60_000).map(value => value.label), ["b", "a"], "an idle gap past the window re-ranks");
+  router.served("a", 2_000);
+  const exhausted = { ...state, accounts: state.accounts.map(value => value.label === "a" ? { ...value, exhausted: true, resetAt: Number.MAX_SAFE_INTEGER } : value) };
+  assert.deepEqual(router.order(exhausted, 3_000).map(value => value.label), ["b"], "an exhausted sticky account drops out and failover walks the ranking");
+  router.setWindow(1_000);
+  assert.deepEqual(router.order(state, 3_500).map(value => value.label), ["b", "a"], "a shorter window from settings applies immediately");
+  const keys = new Map([["resp-1", "key-b"], ["resp-2", "key-a"]]);
+  const entries = [
+    { type: "message", timestamp: "2026-09-16T00:00:00.000Z", message: { role: "assistant", responseId: "resp-1", timestamp: 5_000 } },
+    { type: "message", timestamp: "2026-09-16T00:00:01.000Z", message: { role: "user" } },
+    { type: "message", timestamp: "2026-09-16T00:00:02.000Z", message: { role: "assistant", responseId: "resp-2", timestamp: 6_000 } },
+    { type: "message", timestamp: "2026-09-16T00:00:03.000Z", message: { role: "assistant", responseId: "unknown-account" } },
+  ];
+  assert.deepEqual(router.restore(entries, keys), { key: "key-a", at: 6_000 }, "the last provenance-tagged assistant message wins");
+  router.setWindow(10 * 60_000);
+  assert.deepEqual(router.order(state, 6_500).map(value => value.label), ["a", "b"], "a resumed session keeps its warm account");
+  assert.equal(router.restore([], keys), undefined);
+  assert.deepEqual(router.order(state, 6_500).map(value => value.label), ["b", "a"]);
+  assert.equal(cacheWindowMs({ efficiency: { idleCompactMinutes: 25 } }), 25 * 60_000);
+  assert.equal(cacheWindowMs({ efficiency: { idleCompactMinutes: 0 } }), 10 * 60_000, "a disabled idle compaction still leaves the default cache assumption");
+  assert.equal(cacheWindowMs(undefined), 10 * 60_000);
 });
 
 test("atomic storage serializes concurrent writes and refreshes", async t => {

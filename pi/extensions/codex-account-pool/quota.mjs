@@ -88,12 +88,45 @@ export function formatQuota(quota, now = Date.now()) {
   return `${windows.join("; ")} (${age})`;
 }
 
+function windowName(limit, name, window) {
+  const minutes = window?.windowDurationMins;
+  if (typeof minutes === "number" && minutes > 0) {
+    if (minutes < 60) return `${Math.round(minutes)}m`;
+    return minutes >= 2880 ? `${Math.round(minutes / 1440)}d` : `${Math.round(minutes / 60)}h`;
+  }
+  return limit.limitId === "codex" ? name : `${limit.label ?? limit.limitId} ${name}`;
+}
+
+/** The plan's tightest limit: the window with the least remaining percentage. */
+export function bindingWindow(quota) {
+  if (!quota || !Array.isArray(quota.windows)) return undefined;
+  let lowest;
+  for (const limit of quota.windows) {
+    if (limit.limitReached === true || limit.allowed === false) {
+      return { percent: 0, name: `${limit.label ?? limit.limitId} limit reached`, resetsAt: limit.primary?.resetsAt ?? limit.secondary?.resetsAt };
+    }
+    for (const name of ["primary", "secondary"]) {
+      const window = limit[name];
+      if (!window || typeof window.usedPercent !== "number") continue;
+      const percent = Math.max(0, 100 - window.usedPercent);
+      if (!lowest || percent < lowest.percent) lowest = { percent, name: windowName(limit, name, window), resetsAt: window.resetsAt };
+    }
+  }
+  return lowest;
+}
+
+/** Remaining percentage on the tightest window, or undefined when no usage is known. */
+export function quotaHeadroom(quota) {
+  return bindingWindow(quota)?.percent;
+}
+
 export function compactQuota(quota, now = Date.now()) {
-  if (quotaFreshness(quota, now).state === "unknown") return "quota unknown";
-  const first = quota.windows.flatMap(limit => [limit.primary, limit.secondary]).find(Boolean);
-  if (!first) return "quota unknown";
-  const stale = quotaFreshness(quota, now).state === "stale" ? " stale" : "";
-  return `${Math.max(0, 100 - first.usedPercent)}% left · ${timestamp(first.resetsAt)}${stale}`;
+  const freshness = quotaFreshness(quota, now);
+  if (freshness.state === "unknown") return "quota unknown";
+  const binding = bindingWindow(quota);
+  if (!binding) return "quota unknown";
+  const stale = freshness.state === "stale" ? " stale" : "";
+  return `${binding.percent}% left (${binding.name}) · ${timestamp(binding.resetsAt)}${stale}`;
 }
 
 /** Official codex-api rate_limits.rs header families; retain omitted windows and their age. */
