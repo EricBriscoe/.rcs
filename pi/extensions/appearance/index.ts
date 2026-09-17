@@ -2,6 +2,7 @@ import { basename } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import { BorderGlintEditor, withBorderGlint } from "./border-glint.js";
 
 // Paths/model IDs are data, not terminal commands. Extension statuses retain
 // their own styling and are never filtered by prose or private package APIs.
@@ -11,6 +12,38 @@ export default function (pi: ExtensionAPI) {
   let compact = true;
   let current: ExtensionContext | undefined;
   let requestRender: (() => void) | undefined;
+  type EditorFactory = Parameters<ExtensionContext["ui"]["setEditorComponent"]>[0];
+  let glintFactory: EditorFactory;
+  let previousEditor: EditorFactory;
+  let glintEnabled = false;
+
+  function restoreEditor(ctx: ExtensionContext) {
+    if (glintFactory && ctx.ui.getEditorComponent() === glintFactory) ctx.ui.setEditorComponent(previousEditor);
+    glintFactory = previousEditor = undefined;
+    glintEnabled = false;
+  }
+
+  function installEditor(ctx: ExtensionContext) {
+    if (!glintFactory || ctx.ui.getEditorComponent() !== glintFactory) {
+      const original = ctx.ui.getEditorComponent();
+      previousEditor = original;
+      glintFactory = (tui, theme, keybindings) => {
+        if (!original) {
+          glintEnabled = true;
+          return new BorderGlintEditor(tui, theme, keybindings, () => ctx.ui.theme);
+        }
+        const editor = original(tui, theme, keybindings);
+        const decorated = withBorderGlint(editor, () => ctx.ui.theme);
+        glintEnabled = decorated !== editor;
+        return decorated;
+      };
+      ctx.ui.setEditorComponent(glintFactory);
+    }
+    // Pi owns the animation clock and stops it with the working loader.
+    ctx.ui.setWorkingIndicator(glintEnabled
+      ? { frames: ["●", "●"], intervalMs: 80 }
+      : { frames: ["·", "•", "●", "•"], intervalMs: 300 });
+  }
 
   function install(ctx: ExtensionContext) {
     if (ctx.mode !== "tui") return;
@@ -18,11 +51,10 @@ export default function (pi: ExtensionAPI) {
     if (!compact) {
       ctx.ui.setFooter(undefined);
       ctx.ui.setWorkingIndicator();
+      restoreEditor(ctx);
       return;
     }
-    // Unstyled frames inherit the terminal foreground, including after a theme
-    // switch. No extra timer, editor replacement, or hidden working state.
-    ctx.ui.setWorkingIndicator({ frames: ["·", "•", "●", "•"], intervalMs: 300 });
+    installEditor(ctx);
     ctx.ui.setFooter((tui, _theme, footerData) => {
       const redraw = () => tui.requestRender();
       requestRender = redraw;
@@ -94,6 +126,8 @@ export default function (pi: ExtensionAPI) {
     pi.on(event, (_event, ctx) => {
       if (ctx.mode !== "tui") return;
       current = ctx;
+      // Later session_start handlers (for example pi-vim) may install an editor.
+      if (event === "agent_start" && compact && ctx.ui.getEditorComponent() !== glintFactory) installEditor(ctx);
       requestRender?.();
     });
   }
@@ -103,9 +137,10 @@ export default function (pi: ExtensionAPI) {
     requestRender = undefined;
     ctx.ui.setFooter(undefined);
     ctx.ui.setWorkingIndicator();
+    restoreEditor(ctx);
   });
   pi.registerCommand("appearance", {
-    description: "Use compact or stock footer (session only); choose themes in /settings",
+    description: "Use compact footer/border glint or stock appearance (session only)",
     getArgumentCompletions(prefix) {
       return ["compact", "stock"].filter(value => value.startsWith(prefix)).map(value => ({ value, label: value }));
     },
@@ -113,7 +148,7 @@ export default function (pi: ExtensionAPI) {
       if (ctx.mode !== "tui") return;
       const value = args.trim();
       if (value !== "compact" && value !== "stock") {
-        ctx.ui.notify("/appearance compact|stock — footer only. Themes: /settings → Theme → quiet-graphite or paper.", "info");
+        ctx.ui.notify("/appearance compact|stock — footer and working indicator. Themes: /settings → Theme → quiet-graphite or paper.", "info");
         return;
       }
       compact = value === "compact";
