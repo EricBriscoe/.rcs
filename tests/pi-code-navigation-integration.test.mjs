@@ -64,14 +64,17 @@ test('native first-visit instructions assess every relevant language, persist co
   assert.equal(JSON.parse(result.content[0].text).result.locations[0].line, 1);
   await assert.rejects(f.tool({ action: 'assess', summary: 'incomplete' }), /\.md/);
   await f.tool({ action: 'assess', summary: 'TS verified, Markdown is documentation', skipped: [{ extension: '.md', reason: 'Documentation only' }] });
-  assert.equal(await f.emit('before_agent_start', { systemPrompt: 'BASE' }), undefined);
+  assert.deepEqual(await f.emit('before_agent_start', { systemPrompt: 'BASE' }), first);
+  assert.equal(JSON.parse((await f.tool({ action: 'status' })).content[0].text).needsAssessment, false);
   const oldPid = Number(await readFile(join(f.root, 'lsp.pid'), 'utf8'));
   await f.reload();
   assert.throws(() => process.kill(oldPid, 0), error => error.code === 'ESRCH', 'reload stopped the previous server');
-  assert.equal(await f.emit('before_agent_start', { systemPrompt: 'BASE' }), undefined);
+  assert.deepEqual(await f.emit('before_agent_start', { systemPrompt: 'BASE' }), first);
   await writeFile(join(f.cwd, 'extra.py'), 'def new_language(): pass');
-  assert.match((await f.emit('before_agent_start', { systemPrompt: 'BASE' })).systemPrompt, /First-visit/);
-  await f.command('reassess'); assert.ok(f.notices.some(([text]) => /next agent turn/.test(text)));
+  assert.equal(JSON.parse((await f.tool({ action: 'status' })).content[0].text).needsAssessment, true);
+  assert.deepEqual(await f.emit('before_agent_start', { systemPrompt: 'BASE' }), first);
+  await f.command('reassess'); assert.ok(f.notices.some(([text]) => /code_nav status/.test(text)));
+  assert.deepEqual(await f.emit('before_agent_start', { systemPrompt: 'BASE' }), first);
 });
 
 test('first-visit prompt stays byte-stable while files change and keeps the inventory in the tool result', async t => {
@@ -94,17 +97,32 @@ test('pin changes and missing executables invalidate a completed assessment', as
   await writeFile(join(f.cwd, 'main.ts'), 'function alpha() {}');
   f.ctx.ui.confirm = async () => true;
   await f.tool({ action: 'configure', server: 'custom', command: [process.execPath, localServer], version: 'fixture', languages: [{ extension: '.ts', languageId: 'typescript' }] });
+  const first = await f.emit('before_agent_start', { systemPrompt: 'BASE' });
   await f.tool({ action: 'assess', summary: 'Fixture server verified' });
-  assert.equal(await f.emit('before_agent_start', { systemPrompt: 'BASE' }), undefined);
+  assert.deepEqual(await f.emit('before_agent_start', { systemPrompt: 'BASE' }), first);
   const pinsPath = join(f.source, 'code-navigation.json');
   const pins = JSON.parse(await readFile(pinsPath, 'utf8'));
   pins.astGrepVersion = 'changed-fixture-pin';
   await writeFile(pinsPath, JSON.stringify(pins)); await f.reload();
-  assert.match((await f.emit('before_agent_start', { systemPrompt: 'BASE' })).systemPrompt, /First-visit/);
+  assert.deepEqual(await f.emit('before_agent_start', { systemPrompt: 'BASE' }), first);
+  assert.equal(JSON.parse((await f.tool({ action: 'status' })).content[0].text).needsAssessment, true);
   await f.tool({ action: 'assess', summary: 'New pins reviewed' });
   await rm(localServer);
   const status = JSON.parse((await f.tool({ action: 'status' })).content[0].text);
   assert.equal(status.needsAssessment, true); assert.deepEqual(status.unavailableServers, ['custom']);
+  assert.deepEqual(await f.emit('before_agent_start', { systemPrompt: 'BASE' }), first);
+});
+
+test('prompt construction does not scan, create state, or change on workspace errors', async t => {
+  const f = await fixture(t);
+  const first = await f.emit('before_agent_start', { systemPrompt: 'BASE' });
+  assert.equal(existsSync(join(f.agent, 'code-navigation')), false);
+  await rm(f.cwd, { recursive: true });
+  assert.deepEqual(await f.emit('before_agent_start', { systemPrompt: 'BASE' }), first);
+  await assert.rejects(f.tool({ action: 'status' }), /ENOENT/);
+  assert.deepEqual(await f.emit('before_agent_start', { systemPrompt: 'OTHER' }), {
+    systemPrompt: first.systemPrompt.replace(/^BASE/, 'OTHER'),
+  }, 'preserve upstream prompt changes');
 });
 
 test('untrusted projects do not scan/create state; custom and additional-root approval cannot be guessed', async t => {

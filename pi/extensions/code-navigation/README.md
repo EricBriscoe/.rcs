@@ -6,7 +6,9 @@
 
 ## Setup
 
-The first agent turn in a trusted project requests assessment of **all relevant languages/subprojects**, including unfamiliar/extensionless source. No startup model call or delegated agent. The injected block is byte-stable (root path only) so the cached prompt prefix survives file changes; the live inventory comes from `code_nav status`. Configure useful servers, verify representative queries, then `assess`; explicitly explain unsupported/unnecessary languages. Inventory is a heuristic, not proof of coverage.
+Before substantial navigation in a trusted project, the agent checks `code_nav status`. When `needsAssessment` is true, assess **all relevant languages/subprojects**, including unfamiliar/extensionless source. Configure useful servers, verify representative queries, then `assess`; explicitly explain unsupported/unnecessary languages. Inventory is a heuristic, not proof of coverage.
+
+The prompt block is static, including after assessment, reset, reload, or tooling failure. Prompt construction does not scan the workspace or open state. Live assessment, inventory, paths, and errors stay in tool results. No startup model call or delegated agent.
 
 `/code-nav` shows status; `/code-nav reassess` resets assessment. Tool actions: `status`, `setup` with a `recipe`, `configure` for custom stdio servers, `assess` with `summary`/`skipped`, and `remove`. `directory` supports subprojects; most-specific matching server wins. Select `server` for ambiguous workspace searches.
 
