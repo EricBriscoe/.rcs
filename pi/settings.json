@@ -54,10 +54,20 @@
     "defaultModel": "openai-codex/gpt-5.6-terra",
     "defaultThinking": "medium",
     "agentOverrides": {
-      "scout": { "model": "openai-codex/gpt-5.6-luna", "thinking": "low" },
-      "researcher": { "model": "openai-codex/gpt-5.6-luna", "thinking": "medium" },
-      "reviewer": { "model": "inherit" },
-      "oracle": { "model": "inherit" }
+      "scout": {
+        "model": "openai-codex/gpt-5.6-luna",
+        "thinking": "low"
+      },
+      "researcher": {
+        "model": "openai-codex/gpt-5.6-luna",
+        "thinking": "medium"
+      },
+      "reviewer": {
+        "model": "inherit"
+      },
+      "oracle": {
+        "model": "inherit"
+      }
     }
   },
   "markdown": {
