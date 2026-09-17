@@ -1,6 +1,6 @@
 # Appearance
 
-Default: `quiet-graphite`; alternative: `paper` in `/settings` → Theme. Theme edits hot-reload; restart after setup for new extensions/defaults.
+Default: `quiet-graphite`; alternative: `paper` in `/settings` → Theme. Theme edits hot-reload; restart after setup for new extensions/defaults. The TUI starts in fullscreen mode (`tuiMode` in `pi/settings.json`); switch it in `/settings` → TUI mode, which saves through the settings link and is kept.
 
 `/appearance stock|compact` switches footer/spinner for this session. Compact shows directory/branch, model/thinking, context and Codex pool status. Unknown, stale, reset and exhaustion information stays visible; long statuses wrap. Other extension statuses and stock subagent widgets are preserved without private APIs or extra polling.
 
