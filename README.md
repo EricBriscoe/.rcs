@@ -33,7 +33,7 @@ The Pi launcher pulls `.rcs` before updating dependencies and unpinned npm packa
 | Feature | Usage / reference |
 |---|---|
 | Appearance | Quiet Graphite + compact footer; Paper alternative in `/settings`. `/appearance compact\|stock`. [Guide](pi/extensions/appearance/README.md) |
-| File/code search | Native search plus read-only LSP/ast-grep. `/code-nav [reassess]`. [Guide](pi/extensions/code-navigation/README.md) |
+| File/code search | Native search plus stock [pi-knowledge](https://github.com/nczz/pi-knowledge): local BM25/semantic retrieval and indexed symbol lookup. Use `knowledge_plan` before indexing, then `knowledge_add` and `knowledge_search`. No custom LSP/ast-grep tools. |
 | Quiet output / RTK | Filtered output; raw artifacts retained. `/output raw\|auto`, `/tokens [all]`. [Guide](pi/extensions/efficiency/README.md) |
 | Context inspector | `/context usage` and `/context injections` inspect prompt/tool overhead without adding model tools. [Upstream](https://github.com/dimk90/pi-context-view) |
 | Context pruning | Stock [pi-condense](https://github.com/mjakl/pi-condense) summarizes finished tool-call batches with Luna once per agent reply; originals stay recoverable via `context_tree_query`. Chain compression is off: it rewrote old turns on every reply, which re-read the whole transcript for a few K tokens of savings. `/pruner status\|now\|off`. |
@@ -49,6 +49,8 @@ The Pi launcher pulls `.rcs` before updating dependencies and unpinned npm packa
 `pi-chrome`: `/reload`, `/chrome onboard`, manually load its Chrome companion, `/chrome authorize` (15m), `/chrome doctor`. `/chrome revoke` locks access. Preferred when authorized/connected; broad signed-in-profile access, with page content sent to the model.
 
 `web_browse`/`web_search` remain isolated Playwright fallbacks, without Chrome cookies. Login/CAPTCHA needs human input. `headed: true` shows the fallback browser; close before changing mode.
+
+`pi-knowledge` uses local embeddings and machine-local storage (`~/.pi/knowledge/` by default). No sources are indexed by setup. The launcher disables automatic context injection; upstream still appends a KB inventory to the prompt, which can change after indexing. Native dependency install scripts are enabled only for explicit `pi install npm:pi-knowledge` / `pi update npm:pi-knowledge` operations and its automatic package update. Other package scripts remain disabled. Indexed symbols are not LSP references; read current source before editing. Retired navigation caches remain inert on disk; setup removes only owned extension links.
 
 Keep credentials and runtime data outside Git/Obsidian. Permissions are not encryption or a sandbox. Restart after setup; `/reload` refreshes loaded resources.
 
@@ -66,7 +68,7 @@ Tests use the installed Pi package. Optional live checks:
 | Environment | Test glob | Effects |
 |---|---|---|
 | `PI_RTK_LIVE=1` | `tests/pi-efficiency*.test.mjs` | RTK fixtures |
-| `PI_CODE_NAV_LIVE=1` | `tests/pi-code-navigation*.test.mjs` | Managed servers/AST tooling |
+| `PI_KNOWLEDGE_LIVE=1` | `tests/pi-stock-knowledge.test.mjs` | Local model download, temporary-fixture indexing and retrieval |
 | `PI_WEB_LIVE=1` | `tests/pi-web.test.mjs` | Chromium/local page; also verify public search separately |
 
 Run as `ENV=1 node --test <glob>`; live model tests use existing login, never copied credentials.

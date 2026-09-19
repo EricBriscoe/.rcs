@@ -1,17 +1,16 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { readFile, writeFile, mkdir, lstat, rename, rm, readdir, chmod, realpath } from 'node:fs/promises';
-import { join, dirname, sep } from 'node:path';
+import { readFile, writeFile, mkdir, lstat, rename, rm, chmod, realpath } from 'node:fs/promises';
+import { join, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { agentDirectory, runtimeDependencies, stableVersion } from './extensions/efficiency/runtime.mjs';
+import { agentDirectory, runtimeDependencies, stableVersion, packageInstallEnvironment } from './extensions/efficiency/runtime.mjs';
 import { installRtk } from './install-rtk.mjs';
 
 const exec = promisify(execFile);
 const CORE = '@earendil-works/pi-coding-agent', WEB = '@playwright/cli';
 const LOCK = 'proper-lockfile';
-const nameOf = spec => spec.slice(0, spec.lastIndexOf('@'));
 async function versionAt(path) { try { return JSON.parse(await readFile(path, 'utf8')).version; } catch { return undefined; } }
 async function privateDir(path) {
   await mkdir(path, { recursive: true, mode: 0o700 });
@@ -52,7 +51,7 @@ export async function latestRtk(request = fetch) {
 }
 async function command(command, args, options = {}) {
   return exec(command, args, { timeout: 180000, maxBuffer: 1024 * 1024, ...options, env: {
-    ...process.env, ...options.env, PI_AUTO_UPDATE_ACTIVE: '1', npm_config_ignore_scripts: 'true', npm_config_audit: 'false', npm_config_fund: 'false', npm_config_fetch_retries: '0', npm_config_fetch_timeout: '15000',
+    ...process.env, ...options.env, PI_AUTO_UPDATE_ACTIVE: '1', npm_config_ignore_scripts: options.env?.npm_config_ignore_scripts ?? 'true', npm_config_audit: 'false', npm_config_fund: 'false', npm_config_fetch_retries: '0', npm_config_fetch_timeout: '15000',
   } });
 }
 
@@ -120,52 +119,7 @@ export async function updateLock(directory, fn, { waitMs = 240000 } = {}) {
   }
 }
 
-export async function updateNavigation(agent, baseline, versions, log = message => console.error(message)) {
-  const directory = join(agent, 'code-navigation');
-  let entries;
-  try { entries = await readdir(join(directory, 'packages'), { withFileTypes: true }); }
-  catch (error) { if (error.code === 'ENOENT') return; throw error; }
-  const installed = new Set(), installedSpecs = new Set();
-  for (const entry of entries) {
-    if (!entry.isDirectory() || !/^[a-f0-9]{24}$/.test(entry.name)) continue;
-    try {
-      const packages = JSON.parse(await readFile(join(directory, 'packages', entry.name, 'ready.json'), 'utf8'));
-      for (const spec of packages) { installed.add(nameOf(spec)); installedSpecs.add(spec); }
-    } catch { /* Incomplete installs are not installed tools. */ }
-  }
-  const { recipeCommand, astCommand } = await import('./extensions/code-navigation/packages.ts');
-  const { NavState } = await import('./extensions/code-navigation/state.ts');
-  const state = new NavState(directory);
-  try {
-    for (const recipe of Object.values(baseline.servers)) {
-      if (!recipe.packages || !recipe.packages.some(spec => installed.has(nameOf(spec)))) continue;
-      const packages = recipe.packages.map(spec => versions[nameOf(spec)] ? `${nameOf(spec)}@${versions[nameOf(spec)]}` : spec);
-      if (packages.some(spec => !installedSpecs.has(spec))) log(`[pi update] navigation → ${packages.join(', ')}`);
-      const command = await recipeCommand(directory, { ...recipe, packages });
-      for (const spec of packages) installedSpecs.add(spec);
-      const names = recipe.packages.map(nameOf).sort().join(',');
-      const rows = state.db.prepare('SELECT root,id,config FROM servers').all();
-      for (const row of rows) {
-        const config = JSON.parse(row.config);
-        // Only stock managed commands: leave custom/system servers and custom argv alone.
-        const oldPackages = config.version?.split(', ') || [];
-        const legacy = config.command?.[1]?.includes(`${sep}node_modules${sep}${recipe.package}${sep}`) &&
-          JSON.stringify(config.command.slice(2)) === JSON.stringify(recipe.args || []);
-        const nativeTypescript = recipe.package === 'typescript-language-server' && config.command?.[1]?.endsWith(`${sep}node_modules${sep}typescript${sep}bin${sep}tsc`) &&
-          JSON.stringify(config.command.slice(2)) === JSON.stringify(['--lsp', '--stdio']);
-        const managed = config.command?.[1]?.startsWith(join(directory, 'packages') + sep) &&
-          oldPackages.map(nameOf).sort().join(',') === names && (legacy || nativeTypescript);
-        if (managed && (config.version !== packages.join(', ') || JSON.stringify(config.command) !== JSON.stringify(command))) state.save(row.root, { ...config, command, version: packages.join(', ') });
-      }
-    }
-    for (const [name, version] of Object.entries(versions)) if (name.startsWith('@ast-grep/cli-') && installed.has(name)) {
-      if (!installedSpecs.has(`${name}@${version}`)) log(`[pi update] ast-grep → ${version}`);
-      await astCommand(directory, version);
-    }
-  } finally { state.close(); }
-}
-
-export async function updateDependencies(checkout, { agent = agentDirectory(), npmLatest = latestNpm, rtkLatest = latestRtk, run = command, rtkInstall = installRtk, navigationInstall = updateNavigation, checkoutUpdate = updateCheckout, log = message => console.error(message), lock = updateLock } = {}) {
+export async function updateDependencies(checkout, { agent = agentDirectory(), npmLatest = latestNpm, rtkLatest = latestRtk, run = command, rtkInstall = installRtk, checkoutUpdate = updateCheckout, log = message => console.error(message), lock = updateLock } = {}) {
   const directory = join(agent, 'updates');
   return lock(directory, async () => {
     const previous = runtimeDependencies(agent), current = { ...previous, npm: { ...previous.npm } };
@@ -173,8 +127,6 @@ export async function updateDependencies(checkout, { agent = agentDirectory(), n
     const warn = name => { warnings.push(name); log(`[pi update] ${name}: update unavailable/failed; continuing with installed dependencies. Use PI_AUTO_UPDATE=0 to bypass.`); };
     try { await checkoutUpdate(checkout, { run, log }); }
     catch { warn('.rcs'); }
-    const baseline = JSON.parse(await readFile(join(checkout, 'pi/code-navigation.json'), 'utf8'));
-    const ast = `@ast-grep/cli-${process.platform}-${process.arch}${process.platform === 'linux' ? '-gnu' : ''}`;
     const settings = JSON.parse(await readFile(join(checkout, 'pi/settings.json'), 'utf8'));
     const sources = (settings.packages || []).map(entry => typeof entry === 'string' ? entry : entry.source);
     // Follow stable releases for every unpinned npm package, including filtered
@@ -183,7 +135,7 @@ export async function updateDependencies(checkout, { agent = agentDirectory(), n
       const name = /^npm:((?:@[^/]+\/)?[^@/]+)$/.exec(source)?.[1];
       return name ? [name] : [];
     }))];
-    const names = [...new Set([CORE, WEB, ...packages, LOCK, ast, ...Object.values(baseline.servers).flatMap(recipe => (recipe.packages || []).map(nameOf))])];
+    const names = [...new Set([CORE, WEB, ...packages, LOCK])];
     await Promise.all(names.map(async name => {
       try { const version = await npmLatest(name); if (!stableVersion(version)) throw Error('Invalid version'); latest[name] = version; }
       catch { warn(name); }
@@ -207,18 +159,11 @@ export async function updateDependencies(checkout, { agent = agentDirectory(), n
       catch { warn('Chromium'); }
     }
     for (const name of packages) await install(name, join(agent, 'npm/node_modules', name, 'package.json'), () =>
-      run(process.execPath, [join(global, CORE, 'dist/cli.js'), 'update', `npm:${name}`], { cwd: directory, env }));
+      run(process.execPath, [join(global, CORE, 'dist/cli.js'), 'update', `npm:${name}`], { cwd: directory,
+        env: { ...env, ...packageInstallEnvironment(`npm:${name}`) } }));
     // --no-save/--package-lock=false keeps the bootstrap manifest and lockfile unchanged.
     const pool = join(checkout, 'pi/extensions/codex-account-pool');
     await install(LOCK, join(pool, 'node_modules', LOCK, 'package.json'), () => run('npm', ['install', '--ignore-scripts', '--no-save', '--package-lock=false', `${LOCK}@${latest[LOCK]}`], { cwd: pool, env }));
-    const navigationNames = names.filter(name => ![CORE, WEB, ...packages, LOCK].includes(name));
-    // Incomplete metadata must not downgrade one member of a coupled recipe to
-    // its bootstrap version. Retry the group next launch instead.
-    if (navigationNames.every(name => latest[name])) {
-      const navigationVersions = Object.fromEntries(navigationNames.map(name => [name, latest[name]]));
-      try { await navigationInstall(agent, baseline, navigationVersions, log); Object.assign(current.npm, navigationVersions); }
-      catch { warn('managed navigation'); }
-    }
     try {
       const pins = await rtkLatest();
       await rtkInstall(agent, pins);

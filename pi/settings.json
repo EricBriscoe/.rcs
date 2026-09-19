@@ -31,6 +31,7 @@
     },
     "npm:pi-context-view",
     "npm:pi-memory@0.4.2",
+    "npm:pi-knowledge",
     "npm:pi-condense"
   ],
   "contextPrune": {

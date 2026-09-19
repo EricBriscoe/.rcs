@@ -22,7 +22,6 @@ class PiSetupTests(unittest.TestCase):
         self.ask_extension = self.agent_dir / "extensions/ask-user"
         self.monitor_extension = self.agent_dir / "extensions/monitor"
         self.project_extension = self.agent_dir / "extensions/project-context"
-        self.navigation_extension = self.agent_dir / "extensions/code-navigation"
         self.efficiency_extension = self.agent_dir / "extensions/efficiency"
         self.briefing_extension = self.agent_dir / "extensions/model-briefing"
         self.launcher = self.agent_dir / "bin/pi"
@@ -89,7 +88,6 @@ class PiSetupTests(unittest.TestCase):
             (self.ask_extension, REPO / "pi/extensions/ask-user"),
             (self.monitor_extension, REPO / "pi/extensions/monitor"),
             (self.project_extension, REPO / "pi/extensions/project-context"),
-            (self.navigation_extension, REPO / "pi/extensions/code-navigation"),
             (self.efficiency_extension, REPO / "pi/extensions/efficiency"),
             (self.briefing_extension, REPO / "pi/extensions/model-briefing"),
             (self.agent_dir / "extensions/appearance", REPO / "pi/extensions/appearance"),
@@ -130,7 +128,7 @@ class PiSetupTests(unittest.TestCase):
             self.settings, self.instructions, self.web_extension,
             self.ask_extension, self.monitor_extension,
             self.project_extension,
-            self.navigation_extension, self.efficiency_extension, self.briefing_extension, self.launcher,
+            self.efficiency_extension, self.briefing_extension, self.launcher,
         )
         link_inodes = [link.lstat().st_ino for link in links]
         self.run_setup("--skip-install")
@@ -268,6 +266,29 @@ class PiSetupTests(unittest.TestCase):
         self.assertEqual(extensions[0].read_text(), "// Previous extension fixture\n")
         self.assert_resource_links()
 
+    def test_retired_navigation_links_removed_but_runtime_and_user_replacements_survive(self):
+        extensions = self.agent_dir / "extensions"
+        extensions.mkdir()
+        for name in ["code-navigation", "rcs-code-navigation"]:
+            (extensions / name).symlink_to(REPO / "pi/extensions/code-navigation")
+        state = self.agent_dir / "code-navigation/state.sqlite"
+        state.parent.mkdir()
+        state.write_bytes(b"historical navigation state")
+        self.run_setup("--skip-install")
+        self.run_setup("--skip-install")
+        for name in ["code-navigation", "rcs-code-navigation"]:
+            self.assertFalse((extensions / name).is_symlink())
+        self.assertEqual(state.read_bytes(), b"historical navigation state")
+        replacement = extensions / "code-navigation"
+        replacement.mkdir()
+        (replacement / "index.ts").write_text("// User replacement\n")
+        other = Path(self.temp.name) / "user-navigation"
+        other.mkdir()
+        (extensions / "rcs-code-navigation").symlink_to(other)
+        self.run_setup("--skip-install")
+        self.assertEqual((replacement / "index.ts").read_text(), "// User replacement\n")
+        self.assertEqual((extensions / "rcs-code-navigation").resolve(), other.resolve())
+
     def test_retired_memory_links_removed_and_user_replacements_preserved(self):
         extensions = self.agent_dir / "extensions"
         extensions.mkdir()
@@ -366,6 +387,8 @@ class PiSetupTests(unittest.TestCase):
             "npm_config_ignore_scripts=true",
             "pi", "install", "npm:pi-memory@0.4.2",
             "npm_config_ignore_scripts=true",
+            "pi", "install", "npm:pi-knowledge",
+            "npm_config_ignore_scripts=false",
             "pi", "install", "npm:pi-condense",
             "npm_config_ignore_scripts=true",
             "update-deps",

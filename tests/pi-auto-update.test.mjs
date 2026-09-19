@@ -5,26 +5,23 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { updateDependencies, updateLock, updateNavigation, latestRtk } from '../pi/update-deps.mjs';
-import { effectiveNavigation, effectiveRtk, autoUpdateEnabled } from '../pi/extensions/efficiency/runtime.mjs';
+import { updateDependencies, updateLock, latestRtk } from '../pi/update-deps.mjs';
+import { effectiveRtk, autoUpdateEnabled, packageInstallEnvironment } from '../pi/extensions/efficiency/runtime.mjs';
 import { nativeEnvironment } from '../pi/native-resources.mjs';
-import { NavState, digest } from '../pi/extensions/code-navigation/state.ts';
 
 const CORE = '@earendil-works/pi-coding-agent', WEB = '@playwright/cli';
 async function fixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'pi auto update '));
   t.after(() => rm(root, { recursive: true, force: true }));
   const checkout = join(root, 'checkout'), agent = join(root, 'agent'), global = join(root, 'global');
-  const baseline = { astGrepVersion: '1.0.0', servers: { typescript: { packages: ['typescript-language-server@1.0.0', 'typescript@1.0.0'], package: 'typescript-language-server', bin: 'typescript-language-server', args: ['--stdio'], languages: { '.ts': 'typescript' } }, go: { command: ['gopls'] } } };
   const put = async (file, value) => { await mkdir(join(file, '..'), { recursive: true }); await writeFile(file, typeof value === 'string' ? value : JSON.stringify(value)); };
   await put(join(checkout, 'pi/settings.json'), { packages: ['npm:pi-subagents'] });
-  await put(join(checkout, 'pi/code-navigation.json'), baseline);
   await put(join(checkout, 'pi/rtk.json'), { version: '1.0.0', assets: {} });
   const manifest = name => [CORE, WEB].includes(name) ? join(global, name, 'package.json') : name === 'proper-lockfile' ? join(checkout, 'pi/extensions/codex-account-pool/node_modules', name, 'package.json') : join(agent, 'npm/node_modules', name, 'package.json');
   for (const name of [CORE, WEB, 'pi-subagents', 'proper-lockfile']) await put(manifest(name), { name, version: '1.0.0' });
   const calls = [], logs = []; let metadata = 0;
   const options = { agent, checkoutUpdate: async () => {}, npmLatest: async () => { metadata++; return '2.0.0'; }, rtkLatest: async () => ({ version: '2.0.0', assets: {} }),
-    rtkInstall: async (_agent, pins) => { calls.push(['rtk', pins.version]); }, navigationInstall: async (_agent, _baseline, versions) => { calls.push(['navigation', versions]); },
+    rtkInstall: async (_agent, pins) => { calls.push(['rtk', pins.version]); },
     log: line => logs.push(line), run: async (cmd, args, opts) => {
       calls.push([cmd, args, opts]);
       if (cmd === 'npm' && args[0] === 'root') return { stdout: global + '\n' };
@@ -39,7 +36,7 @@ async function fixture(t) {
       return { stdout: '' };
     },
   };
-  return { root, checkout, agent, global, baseline, calls, logs, options, put, manifest, metadata: () => metadata };
+  return { root, checkout, agent, global, calls, logs, options, put, manifest, metadata: () => metadata };
 }
 
 test('every top-level launch checks; explicit bypass/offline/children never update', () => {
@@ -47,6 +44,17 @@ test('every top-level launch checks; explicit bypass/offline/children never upda
   assert.equal(autoUpdateEnabled(['--version'], {}), true);
   for (const env of [{ PI_AUTO_UPDATE: '0' }, { PI_OFFLINE: '1' }, { PI_AUTO_UPDATE_ACTIVE: '1' }, { PI_SUBAGENT_CHILD: '1' }]) assert.equal(autoUpdateEnabled([], env), false);
   assert.equal(autoUpdateEnabled(['--offline'], {}), false);
+});
+
+test('only explicit stock knowledge package operations enable install scripts', () => {
+  const allowed = packageInstallEnvironment('npm:pi-knowledge');
+  assert.equal(allowed.npm_config_ignore_scripts, 'false');
+  for (const source of [undefined, 'npm:pi-subagents', 'npm:pi-knowledge-extra']) {
+    assert.equal(packageInstallEnvironment(source).npm_config_ignore_scripts, 'true');
+  }
+  const env = nativeEnvironment('/missing-checkout', { PI_KNOWLEDGE_AUTO_INJECT: 'true' });
+  assert.equal(env.PI_KNOWLEDGE_AUTO_INJECT, 'false');
+  assert.equal(env.PI_KNOWLEDGE_EMBEDDING, 'local:multilingual-e5-small');
 });
 
 test('real launcher invokes updater every time, bypasses it for repair and preserves stock argv', async t => {
@@ -64,6 +72,14 @@ test('real launcher invokes updater every time, bypasses it for repair and prese
   const bypass = await launch(['--no-extensions', '--version'], { PI_AUTO_UPDATE: '0' });
   assert.deepEqual(JSON.parse(bypass.stdout), { args: ['--no-extensions', '--version'], nested: '1', telemetry: '1', ignoreScripts: 'true', audit: 'false', fund: 'false' });
   await assert.rejects(readFile(count), { code: 'ENOENT' });
+  for (const args of [['install', 'npm:pi-knowledge'], ['update', 'npm:pi-knowledge']]) {
+    const result = await launch(args, { PI_AUTO_UPDATE: '0' });
+    assert.equal(JSON.parse(result.stdout).ignoreScripts, 'false');
+  }
+  for (const args of [['install', 'npm:pi-subagents'], ['update', '--all'], ['install', 'npm:pi-knowledge', '--unexpected']]) {
+    const result = await launch(args, { PI_AUTO_UPDATE: '0' });
+    assert.equal(JSON.parse(result.stdout).ignoreScripts, 'true');
+  }
   await launch(['--version']); await launch(['--version']);
   assert.equal(await readFile(count, 'utf8'), 'check\ncheck\n');
   await launch(['--offline']); assert.equal(await readFile(count, 'utf8'), 'check\ncheck\n');
@@ -75,7 +91,7 @@ test('real launcher invokes updater every time, bypasses it for repair and prese
 
 test('updates only owned dependencies, uses stock package update and leaves checked-in definitions untouched', async t => {
   const f = await fixture(t);
-  const paths = ['pi/settings.json', 'pi/code-navigation.json', 'pi/rtk.json'];
+  const paths = ['pi/settings.json', 'pi/rtk.json'];
   const before = await Promise.all(paths.map(path => readFile(join(f.checkout, path), 'utf8')));
   const result = await updateDependencies(f.checkout, f.options);
   assert.deepEqual(result.warnings, []);
@@ -87,8 +103,6 @@ test('updates only owned dependencies, uses stock package update and leaves chec
   assert.ok(!f.calls.some(([cmd]) => cmd === 'brew' || cmd.endsWith('/brew')));
   assert.deepEqual(await Promise.all(paths.map(path => readFile(join(f.checkout, path), 'utf8'))), before);
   assert.equal(effectiveRtk(f.checkout, f.agent).version, '2.0.0');
-  assert.deepEqual(effectiveNavigation(f.checkout, f.agent).servers.typescript.packages, ['typescript-language-server@2.0.0', 'typescript@2.0.0']);
-  assert.deepEqual(effectiveNavigation(f.checkout, f.agent).servers.go.command, ['gopls']);
   assert.ok(nativeEnvironment(f.checkout, { PI_CODING_AGENT_DIR: f.agent, PATH: '/usr/bin' }).PATH.startsWith(join(f.agent, 'tooling/rtk/2.0.0')));
   const count = f.metadata(); f.calls.length = 0;
   await updateDependencies(f.checkout, f.options);
@@ -104,12 +118,12 @@ test('checkout sync runs under the lock before reading dependency definitions; f
     lock: (directory, fn) => updateLock(directory, async () => { locked = true; try { return await fn(); } finally { locked = false; } }),
     checkoutUpdate: async (checkout) => {
       assert.equal(locked, true); assert.equal(checkout, f.checkout);
-      await f.put(join(checkout, 'pi/code-navigation.json'), { servers: {} }); synced = true;
+      await f.put(join(checkout, 'pi/settings.json'), { packages: ['npm:pi-knowledge'] }); synced = true;
     },
     npmLatest: async () => { assert.equal(synced, true); return '2.0.0'; },
-    navigationInstall: async (_agent, baseline) => assert.deepEqual(baseline, { servers: {} }),
   });
   assert.deepEqual(result.warnings, []);
+  assert.equal(result.npm['pi-knowledge'], '2.0.0');
   const failed = await updateDependencies(f.checkout, { ...f.options, checkoutUpdate: async () => { throw Error('PRIVATE_GIT_REMOTE'); } });
   assert.ok(failed.warnings.includes('.rcs'));
   assert.equal(failed.npm[CORE], '2.0.0');
@@ -134,12 +148,11 @@ test('Bigpowers updates filtered packages without changing filters, retries fail
   await updateDependencies(f.checkout, options);
   assert.equal(attempts, 2, 'current version needs no reinstall');
   assert.deepEqual(JSON.parse(await readFile(join(f.checkout, 'pi/settings.json'), 'utf8')), settings);
-  for (const [cmd, versions] of f.calls) if (cmd === 'navigation') assert.equal(versions.bigpowers, undefined);
 });
 
 test('all configured unpinned npm packages update, including scoped and filtered entries', async t => {
   const f = await fixture(t);
-  const names = ['pi-mcp-adapter', 'pi-vim', 'pi-chrome', '@example/skills'];
+  const names = ['pi-mcp-adapter', 'pi-vim', 'pi-chrome', 'pi-knowledge', '@example/skills'];
   await f.put(join(f.checkout, 'pi/settings.json'), { packages: [
     ...names.map(name => `npm:${name}`), { source: 'npm:@example/skills', extensions: [] },
     'npm:pinned@1.0.0', 'npm:@example/pinned@1.0.0', 'git:github.com/example/skills@v1', './local',
@@ -153,15 +166,16 @@ test('all configured unpinned npm packages update, including scoped and filtered
     assert.equal(state.npm[name], '2.0.0');
   }
   assert.ok(!queried.includes('pinned') && !queried.includes('@example/pinned'));
-  for (const [cmd, versions] of f.calls) if (cmd === 'navigation') {
-    for (const name of names) assert.equal(versions[name], undefined);
+  for (const [cmd, args, opts] of f.calls) if (cmd === process.execPath && args[1] === 'update') {
+    assert.equal(opts.env.npm_config_ignore_scripts, args[2] === 'npm:pi-knowledge' ? 'false' : 'true');
   }
+  assert.ok(!queried.some(name => /ast-grep|typescript|language-server/.test(name)));
 });
 
 test('shipped package sources preserve the stock memory pin and Bigpowers resource filters', async () => {
   const settings = JSON.parse(await readFile(new URL('../pi/settings.json', import.meta.url), 'utf8'));
   const sources = settings.packages.map(entry => typeof entry === 'string' ? entry : entry.source);
-  assert.deepEqual(sources, ['npm:pi-subagents', 'npm:pi-mcp-adapter', 'npm:pi-vim', 'npm:pi-chrome', 'npm:bigpowers', 'npm:pi-context-view', 'npm:pi-memory@0.4.2', 'npm:pi-condense']);
+  assert.deepEqual(sources, ['npm:pi-subagents', 'npm:pi-mcp-adapter', 'npm:pi-vim', 'npm:pi-chrome', 'npm:bigpowers', 'npm:pi-context-view', 'npm:pi-memory@0.4.2', 'npm:pi-knowledge', 'npm:pi-condense']);
   assert.deepEqual(settings.packages.find(entry => entry.source === 'npm:bigpowers'), { source: 'npm:bigpowers', extensions: [], themes: [] });
 });
 
@@ -183,7 +197,6 @@ test('offline metadata keeps installed selections, failures retry and errors nev
   f.calls.length = 0;
   const result = await updateDependencies(f.checkout, { ...f.options, npmLatest: async () => { throw Error('PRIVATE_ERROR_BODY'); }, rtkLatest: async () => { throw Error('PRIVATE_ERROR_BODY'); } });
   assert.equal(result.rtk.version, '2.0.0'); assert.equal(result.npm[CORE], '2.0.0');
-  assert.ok(!f.calls.some(([cmd]) => cmd === 'navigation'), 'unavailable metadata must not downgrade coupled tooling');
   assert.ok(result.warnings.includes('RTK'));
   assert.ok(!f.logs.join('\n').includes('PRIVATE_ERROR_BODY'));
   assert.equal(effectiveRtk(f.checkout, f.agent).version, '2.0.0');
@@ -251,35 +264,4 @@ test('RTK terminal launcher follows the same machine-local release without trigg
   const launcher = new URL('../pi/rtk.mjs', import.meta.url);
   const { stdout } = await promisify(execFile)(process.execPath, [launcher.pathname, 'gain', '--daily'], { env: { ...process.env, PI_CODING_AGENT_DIR: f.agent } });
   assert.equal(stdout, '1\ngain\n--daily\n');
-});
-
-test('navigation upgrades only installed managed recipes, preserves custom options and skips system/custom commands', async t => {
-  const f = await fixture(t), dir = join(f.agent, 'code-navigation');
-  const old = f.baseline.servers.typescript.packages, next = old.map(spec => spec.replace('1.0.0', '2.0.0'));
-  async function installed(packages) {
-    const root = join(dir, 'packages', digest(JSON.stringify([...packages].sort())).slice(0, 24));
-    await f.put(join(root, 'ready.json'), packages);
-    await f.put(join(root, 'node_modules/typescript-language-server/package.json'), { bin: { 'typescript-language-server': 'cli.mjs' } });
-    await f.put(join(root, 'node_modules/typescript/package.json'), { bin: { tsc: 'bin/tsc' } });
-    return join(root, 'node_modules/typescript-language-server/cli.mjs');
-  }
-  const before = await installed(old), after = await installed(next);
-  const state = new NavState(dir); t.after(() => state.close());
-  const config = { id: 'typescript', directory: '.', command: [process.execPath, before, '--stdio'], version: old.join(', '), languages: { '.ts': 'typescript' }, settings: { retained: true }, initializationOptions: { retained: true } };
-  state.save(f.root, config);
-  state.save(f.root, { ...config, id: 'custom', command: [process.execPath, before, '--custom'] });
-  state.save(f.root, { id: 'system', directory: '.', command: ['gopls'], languages: { '.go': 'go' }, version: 'system' });
-  await updateNavigation(f.agent, f.baseline, { 'typescript-language-server': '2.0.0', typescript: '2.0.0' });
-  const upgraded = state.servers(f.root).find(row => row.id === 'typescript');
-  assert.deepEqual(upgraded, { ...config, command: [process.execPath, after, '--stdio'], version: next.join(', ') });
-  assert.equal(state.servers(f.root).find(row => row.id === 'custom').command.at(-1), '--custom');
-  assert.deepEqual(state.servers(f.root).find(row => row.id === 'system').command, ['gopls']);
-  for (const version of ['7.0.2', '8.0.0']) {
-    const packages = ['typescript-language-server@6.0.0', `typescript@${version}`];
-    const entry = await installed(packages);
-    await updateNavigation(f.agent, f.baseline, { 'typescript-language-server': '6.0.0', typescript: version });
-    const native = state.servers(f.root).find(row => row.id === 'typescript');
-    assert.deepEqual(native.command, [process.execPath, join(entry, '../../typescript/bin/tsc'), '--lsp', '--stdio']);
-    assert.equal(native.version, packages.join(', '));
-  }
 });
