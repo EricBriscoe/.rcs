@@ -44,7 +44,6 @@ add-zsh-hook chpwd _auto_venv
 _auto_venv  # cover the shell's starting directory; chpwd only fires on cd
 
 eval "$(fnm env)"
-eval "$(fnm completions --shell zsh)"
 
 cleandocker () {
   read -q "REPLY?Nuke ALL Docker containers, images, volumes, networks, and build cache? [y/N] " || return
@@ -67,6 +66,9 @@ if [[ -n ~/.zcompdump(#qN.mh+24) ]]; then
 else
   compinit -C
 fi
+
+# Register fnm completions after compinit defines compdef.
+eval "$(fnm completions --shell zsh)"
 
 export PATH="$HOME/.local/bin:$PATH"
 export PATH="$HOME/.cargo/bin:$PATH"
