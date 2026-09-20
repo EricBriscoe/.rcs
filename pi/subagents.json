@@ -2,6 +2,10 @@
   "timeoutMs": 259200000,
   "maxSubagentSpawnsPerRun": 1024,
   "maxSubagentSpawnsPerSession": 0,
+  "parallel": {
+    "maxTasks": 16,
+    "concurrency": 8
+  },
   "control": {
     "enabled": true,
     "needsAttentionAfterMs": 900000,

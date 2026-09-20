@@ -11,7 +11,7 @@
   "hideThinkingBlock": true,
   "editorPaddingX": 1,
   "showCacheMissNotices": true,
-  "lastChangelogVersion": "0.85.1",
+  "lastChangelogVersion": "0.86.1",
   "compaction": {
     "keepRecentTokens": 30000
   },
