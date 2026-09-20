@@ -25,13 +25,27 @@ class PiSetupTests(unittest.TestCase):
         self.efficiency_extension = self.agent_dir / "extensions/efficiency"
         self.briefing_extension = self.agent_dir / "extensions/model-briefing"
         self.launcher = self.agent_dir / "bin/pi"
-        self.env = dict(os.environ, PI_CODING_AGENT_DIR=str(self.agent_dir), HOME=self.temp.name, PI_AUTO_UPDATE="1")
+        self.env = dict(os.environ, PI_CODING_AGENT_DIR=str(self.agent_dir), HOME=self.temp.name, PI_AUTO_UPDATE="1",
+                        XDG_CONFIG_HOME=str(Path(self.temp.name) / ".config"),
+                        GIT_CONFIG_GLOBAL=str(Path(self.temp.name) / ".gitconfig"), GIT_CONFIG_NOSYSTEM="1")
 
     def run_setup(self, *args):
         return subprocess.run(
             ["/bin/bash", str(REPO / "setup-pi.sh"), *args],
             env=self.env, cwd=REPO, capture_output=True, text=True, check=True,
         )
+
+    def test_skip_install_reconciles_global_ignores(self):
+        ignores = Path(self.temp.name) / ".gitignore"
+        ignores.write_text(".serena/\n")
+        self.run_setup("--skip-install")
+        first = ignores.read_text()
+        self.run_setup("--skip-install")
+        self.assertEqual(ignores.read_text(), first)
+        self.assertTrue(first.startswith(".serena/\n"))
+        self.assertIn("\nspecs/\n", first)
+        self.assertIn("\n**/.pi/subagents/\n", first)
+        self.assertNotIn("AGENTS.md", first)
 
     def stub_install_commands(self, npm_exit=0, browser_exit=0, qmd_present=False, qmd_exit=0):
         fake_bin = Path(self.temp.name) / "bin"
