@@ -41,7 +41,7 @@ class FullSetupTests(unittest.TestCase):
   --prefix) if [ "${{2:-}}" = fzf ]; then echo "{self.bin.parent}/fzf"; else echo "{self.bin.parent}"; fi ;;
   *) printf 'brew %s\\n' "$*" >> "$TEST_LOG"; exit "${{BREW_EXIT:-0}}" ;;
 esac''')
-        self.stub("node", '''if [ "$1" = -p ]; then exec "$REAL_NODE" "$@"; fi
+        self.stub("node", '''if [ "$1" = -p ] || [ "${1##*/}" = settings.mjs ]; then exec "$REAL_NODE" "$@"; fi
 printf 'node %s\\n' "$*" >> "$TEST_LOG"
 exit "${NODE_EXIT:-0}"''')
         self.stub("npm", 'printf "npm %s\\n" "$*" >> "$TEST_LOG"; exit "${NPM_EXIT:-0}"')
@@ -71,10 +71,11 @@ exit "${NODE_EXIT:-0}"''')
         self.stub("codex", "exit 0")
         self.stub("claude", "exit 0")
         self.assert_success()
+        self.assertTrue((self.home / ".pi/agent/settings.json").is_file())
+        self.assertFalse((self.home / ".pi/agent/settings.json").is_symlink())
         expected = {
             ".zshrc": "zshrc", ".tmux.conf": "tmux.conf", ".config/nvim": "nvim",
             ".pi/agent/AGENTS.md": "AGENTS.md",
-            ".pi/agent/settings.json": "pi/settings.json",
             ".codex/AGENTS.md": "AGENTS.md", ".claude/CLAUDE.md": "AGENTS.md",
         }
         for harness, filename in (("codex", "AGENTS.md"), ("claude", "CLAUDE.md")):

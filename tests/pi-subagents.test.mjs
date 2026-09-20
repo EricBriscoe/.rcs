@@ -15,6 +15,14 @@ const agentDir = process.env.PI_CODING_AGENT_DIR || join(homedir(), '.pi/agent')
 const npmRoot = join(agentDir, 'npm');
 const installed = join(npmRoot, 'node_modules/pi-subagents');
 
+// Upstream ships compiled JavaScript now; older installs used TypeScript sources.
+function installedModule(path) {
+  const candidates = ['js', 'ts'].map(extension => join(installed, `${path}.${extension}`));
+  const resolved = candidates.find(candidate => existsSync(candidate));
+  assert.ok(resolved, `Missing pi-subagents module ${path}; run setup-pi.sh to install the declared package`);
+  return resolved;
+}
+
 test('replacement tracks upstream updates with cost-tiered roles and no model allowlist', async () => {
   assert.ok(settings.packages.includes('npm:pi-subagents'));
   // Subscription usage is dominated by input context; children default to cheaper Codex
@@ -51,7 +59,7 @@ test('long-run policy keeps monitoring advisory and documents stock limits', asy
 });
 
 test('installed pi-subagents loads long-run settings and cost-tiered roles via standard discovery in both Pi distributions', { timeout: 60000 }, async t => {
-  assert.ok(existsSync(join(installed, 'index.ts')), 'Run setup-pi.sh to install the declared Pi package first');
+  installedModule('index');
   const metadata = JSON.parse(await readFile(join(installed, 'package.json'), 'utf8'));
   assert.equal(`npm:${metadata.name}`, settings.packages[0]);
   assert.match(metadata.version, /^\d+\.\d+\.\d+$/);
@@ -65,11 +73,11 @@ test('installed pi-subagents loads long-run settings and cost-tiered roles via s
   await symlink(new URL('pi/subagents.json', checkout), join(agent, 'extensions/subagent/config.json'));
   const probe = join(root, 'probe.ts');
   await writeFile(probe, `import {writeFileSync} from 'node:fs';
-import {discoverAgents} from ${JSON.stringify(join(installed, 'src/agents/agents.ts'))};
-import {loadConfig} from ${JSON.stringify(join(installed, 'src/extension/config.ts'))};
-import {resolveConfigDefaultTimeoutMs,resolveSingleAgentLaunchTimeout} from ${JSON.stringify(join(installed, 'src/runs/foreground/subagent-executor.ts'))};
-import {resolveControlConfig,deriveActivityState,shouldEmitOpenToolAttention} from ${JSON.stringify(join(installed, 'src/runs/shared/subagent-control.ts'))};
-import {resolveMaxSubagentSpawnsPerRun,resolveMaxSubagentSpawnsPerSession} from ${JSON.stringify(join(installed, 'src/shared/types.ts'))};
+import {discoverAgents} from ${JSON.stringify(installedModule('src/agents/agents'))};
+import {loadConfig} from ${JSON.stringify(installedModule('src/extension/config'))};
+import {resolveConfigDefaultTimeoutMs,resolveSingleAgentLaunchTimeout} from ${JSON.stringify(installedModule('src/runs/foreground/subagent-executor'))};
+import {resolveControlConfig,deriveActivityState,shouldEmitOpenToolAttention} from ${JSON.stringify(installedModule('src/runs/shared/subagent-control'))};
+import {resolveMaxSubagentSpawnsPerRun,resolveMaxSubagentSpawnsPerSession} from ${JSON.stringify(installedModule('src/shared/types'))};
 export default function(pi) { pi.registerCommand('replacement-probe', { handler: async (_args,ctx) => {
   const config = loadConfig(), timeout = resolveConfigDefaultTimeoutMs(config.timeoutMs), control = resolveControlConfig(config.control);
   const activity = now => deriveActivityState({config:control,startedAt:0,lastActivityAt:0,turnCount:1,thinking:'high',now}) ?? null;

@@ -21,7 +21,6 @@ export interface CacheDiagnosis {
 const SECTION_MARKERS: [name: string, marker: string][] = [
   ["skills", "<available_skills>"],
   ["project-instructions", "<project_instructions"],
-  ["code-navigation", "# First-visit code navigation setup"],
   ["memory", "\n## Memory"],
   ["chrome", "<chrome-profile-bridge>"],
   ["subagents", "<available_agents"],

@@ -79,14 +79,14 @@ test('an appended conversation is not a divergence when only the prompt changed'
 });
 
 test('a system prompt change names the injected sections that appeared or vanished', () => {
-  const full = 'BASE PROMPT\n<available_skills>...</available_skills>\n# First-visit code navigation setup\nroot\n\n## Memory\n(snapshot)\n# Memory\nnotes\n<chrome-profile-bridge>\nprimer\n</chrome-profile-bridge>';
+  const full = 'BASE PROMPT\n<available_skills>...</available_skills>\n## Memory\n(snapshot)\n# Memory\nnotes\n<chrome-profile-bridge>\nprimer\n</chrome-profile-bridge>';
   const previous = fingerprintRequest({ ...payload, instructions: full });
   const stripped = fingerprintRequest({ ...payload, instructions: 'BASE PROMPT\n<available_skills>...</available_skills>' });
   const result = diagnoseCacheDrop(previous, stripped, { gapMs: 3000 });
   assert.equal(result.cause, 'system-prompt');
-  assert.match(result.summary, /removed: code-navigation, memory, chrome/);
+  assert.match(result.summary, /removed: memory, chrome/);
   const added = diagnoseCacheDrop(stripped, previous, { gapMs: 3000 });
-  assert.match(added.summary, /added: code-navigation, memory, chrome/);
+  assert.match(added.summary, /added: memory, chrome/);
   const same = fingerprintRequest({ ...payload, instructions: full + ' tail' });
   assert.match(diagnoseCacheDrop(previous, same, { gapMs: 3000 }).summary, /system prompt changed \(\+5 chars\)$/);
 });

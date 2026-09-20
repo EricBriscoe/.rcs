@@ -2,7 +2,7 @@
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-6-astra",
   "defaultThinkingLevel": "medium",
-  "theme": "quiet-graphite",
+  "theme": "quiet-graphite/quiet-graphite",
   "tuiMode": "fullscreen",
   "steeringMode": "all",
   "followUpMode": "all",
@@ -11,7 +11,6 @@
   "hideThinkingBlock": true,
   "editorPaddingX": 1,
   "showCacheMissNotices": true,
-  "lastChangelogVersion": "0.86.1",
   "compaction": {
     "keepRecentTokens": 30000
   },
@@ -31,6 +30,7 @@
     },
     "npm:pi-context-view",
     "npm:pi-memory@0.4.2",
+    "npm:pi-knowledge",
     "npm:pi-condense"
   ],
   "contextPrune": {

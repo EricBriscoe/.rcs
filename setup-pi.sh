@@ -71,13 +71,13 @@ pi_agent_dir="$(cd "$pi_agent_dir" && pwd)"
 backup_root="$pi_agent_dir"
 source "$REPO/setup-common.sh"
 
-link_resource "$REPO/pi/settings.json" "$pi_agent_dir/settings.json" settings
+node "$REPO/pi/settings.mjs"
 link_resource "$REPO/pi/models.json" "$pi_agent_dir/models.json" models
 link_resource "$REPO/AGENTS.md" "$pi_agent_dir/AGENTS.md" instructions
 link_resource "$REPO/pi/SUBAGENTS.md" "$pi_agent_dir/SUBAGENTS.md" instructions
 link_resource "$REPO/pi/subagents.json" "$pi_agent_dir/extensions/subagent/config.json" subagent-config
 # Keep sibling names identical to the checkout for relative extension imports.
-for extension in web ask-user monitor project-context code-navigation efficiency codex-account-pool appearance model-briefing tool-loader; do
+for extension in web ask-user monitor project-context efficiency codex-account-pool appearance model-briefing tool-loader; do
   source="$REPO/pi/extensions/$extension"
   link_resource "$source" "$pi_agent_dir/extensions/$extension" extension
   # Retire only our old prefixed link; preserve user-owned replacements.
@@ -87,7 +87,7 @@ for extension in web ask-user monitor project-context code-navigation efficiency
   fi
 done
 # Retire only our links, never user replacements or runtime data.
-for extension in orchestrate memory; do
+for extension in orchestrate memory code-navigation; do
   for previous in "$pi_agent_dir/extensions/$extension" "$pi_agent_dir/extensions/rcs-$extension"; do
     if [[ -L "$previous" && "$(readlink "$previous")" == "$REPO/pi/extensions/$extension" ]]; then
       rm "$previous"
@@ -110,17 +110,20 @@ if ! "$skip_install"; then
     const source = typeof p === "string" ? p : p?.source;
     if (typeof source !== "string" || !source || /[\r\n]/.test(source)) throw new Error("Expected a package source string");
     return source;
-  }).join("\n")' "$REPO/pi/settings.json")"
+  }).join("\n")' "$pi_agent_dir/settings.json")"
   while IFS= read -r package; do
     [[ -n "$package" ]] || continue
-    PI_AUTO_UPDATE=0 npm_config_ignore_scripts=true "$pi_agent_dir/bin/pi" install "$package"
+    # pi-knowledge needs native SQLite, tree-sitter and ONNX install scripts.
+    ignore_scripts=true
+    [[ "$package" != npm:pi-knowledge ]] || ignore_scripts=false
+    PI_AUTO_UPDATE=0 npm_config_ignore_scripts="$ignore_scripts" "$pi_agent_dir/bin/pi" install "$package"
   done <<< "$packages"
   if [[ "${PI_AUTO_UPDATE:-1}" != 0 ]]; then
     node "$REPO/pi/update-deps.mjs" || printf 'Dependency update incomplete; the next Pi launch retries.\n' >&2
   fi
 fi
 
-printf 'Pi settings linked to %s/pi/settings.json\n' "$REPO"
+printf 'Pi local settings reconciled with %s/pi/settings.json\n' "$REPO"
 printf 'Pi web tools linked to %s/pi/extensions/web\n' "$REPO"
 printf 'Pi owned extensions and Quiet Graphite/Paper themes linked from %s/pi/\n' "$REPO"
 printf 'Pi-native launcher linked to %s/bin/pi\n' "$pi_agent_dir"

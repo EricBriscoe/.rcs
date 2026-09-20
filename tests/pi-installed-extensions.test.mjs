@@ -10,7 +10,7 @@ import test from "node:test";
 const exec = promisify(execFile);
 const checkout = dirname(dirname(fileURLToPath(import.meta.url)));
 const packageDir = join(execFileSync("npm", ["root", "-g"], { encoding: "utf8" }).trim(), "@earendil-works/pi-coding-agent");
-const names = ["appearance", "ask-user", "code-navigation", "efficiency", "model-briefing", "monitor", "project-context", "tool-loader", "web"];
+const names = ["appearance", "ask-user", "efficiency", "model-briefing", "monitor", "project-context", "tool-loader", "web"];
 
 test("migrated installer links load sibling imports in both Pi CLI distributions", { timeout: 60000 }, async t => {
   const root = await mkdtemp(join(tmpdir(), "pi installed extensions "));
@@ -19,6 +19,7 @@ test("migrated installer links load sibling imports in both Pi CLI distributions
   await mkdir(join(agent, "extensions"), { recursive: true });
   await mkdir(cwd);
   for (const name of names) await symlink(join(checkout, "pi/extensions", name), join(agent, "extensions", `rcs-${name}`));
+  for (const name of ["code-navigation", "rcs-code-navigation"]) await symlink(join(checkout, "pi/extensions/code-navigation"), join(agent, "extensions", name));
   const env = { ...process.env, HOME: root, PI_CODING_AGENT_DIR: agent, PI_OFFLINE: "1" };
   await exec("/bin/bash", [join(checkout, "setup-pi.sh"), "--skip-install"], { cwd, env });
   // This checks owned links, separately from the installed upstream package test.
@@ -41,13 +42,14 @@ export default function(pi) {
       const { stdout, stderr } = await pending;
       assert.doesNotMatch(stdout + stderr, /Failed to load extension|Cannot find module|duplicate/i);
       const loaded = JSON.parse(await readFile(output, "utf8"));
-      for (const tool of ["ask_user", "code_nav", "code_search", "monitor", "web_search", "web_browse"]) assert.ok(loaded.tools.includes(tool), tool);
+      for (const tool of ["ask_user", "monitor", "web_search", "web_browse"]) assert.ok(loaded.tools.includes(tool), tool);
       assert.ok(!loaded.tools.includes("memory"), "custom memory tool is retired");
       const commands = loaded.commands.filter(c => c.source === "extension");
       assert.ok(!commands.some(c => c.name === "orchestrate"));
-      assert.ok(commands.some(c => c.name === "code-nav"));
+      assert.ok(!commands.some(c => c.name === "code-nav"));
+      assert.ok(!loaded.tools.includes("code_nav") && !loaded.tools.includes("code_search"));
       assert.ok(!commands.some(c => /:\d+$/.test(c.name)), "no duplicate registrations after migration");
-      for (const name of ["appearance", "code-nav", "tokens", "output"]) assert.ok(commands.find(c => c.name === name).sourceInfo.path.startsWith(join(agent, "extensions")), "loaded through installed links");
+      for (const name of ["appearance", "tokens", "output"]) assert.ok(commands.find(c => c.name === name).sourceInfo.path.startsWith(join(agent, "extensions")), "loaded through installed links");
       await rm(output);
     });
   }
