@@ -49,7 +49,7 @@ class PiSetupTests(unittest.TestCase):
         self.env["BASH_ENV"] = str(bash_env)
         scripts = {
             "node": (
-                'if [ "$1" = "-p" ]; then exec "$PI_SETUP_REAL_NODE" "$@"; fi\n'
+                'if [ "$1" = "-p" ] || [ "${1##*/}" = "settings.mjs" ]; then exec "$PI_SETUP_REAL_NODE" "$@"; fi\n'
                 'if [ "$2" = "install" ]; then printf "%s\\n" pi "$2" "$3" '
                 '"npm_config_ignore_scripts=${npm_config_ignore_scripts:-}" >> "$PI_SETUP_TEST_LOG"; fi\n'
                 'if [ "${1##*/}" = "update-deps.mjs" ]; then printf "%s\\n" update-deps >> "$PI_SETUP_TEST_LOG"; fi\n'
@@ -78,8 +78,9 @@ class PiSetupTests(unittest.TestCase):
         self.env.pop("PLAYWRIGHT_SKIP_BROWSER_GC", None)
 
     def assert_resource_links(self):
+        self.assertTrue(self.settings.is_file())
+        self.assertFalse(self.settings.is_symlink())
         for link, source in (
-            (self.settings, REPO / "pi/settings.json"),
             (self.agent_dir / "models.json", REPO / "pi/models.json"),
             (self.instructions, REPO / "AGENTS.md"),
             (self.agent_dir / "SUBAGENTS.md", REPO / "pi/SUBAGENTS.md"),
@@ -195,7 +196,8 @@ class PiSetupTests(unittest.TestCase):
         backups = list(self.agent_dir.glob("settings-backup.*/settings.json"))
         self.assertEqual(len(backups), 1)
         self.assertEqual(backups[0].read_text(), previous)
-        self.assertEqual(self.settings.resolve(), REPO / "pi/settings.json")
+        self.assertFalse(self.settings.is_symlink())
+        self.assertEqual(json.loads(self.settings.read_text())["defaultProvider"], "another-provider")
 
     def test_subagent_config_backs_up_conflicts_preserves_siblings_and_relinks_once(self):
         directory = self.agent_dir / "extensions/subagent"

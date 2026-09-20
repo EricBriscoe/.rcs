@@ -7,6 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { agentDirectory, runtimeDependencies, stableVersion, packageInstallEnvironment } from './extensions/efficiency/runtime.mjs';
 import { installRtk } from './install-rtk.mjs';
+import { syncSettings } from './settings.mjs';
 
 const exec = promisify(execFile);
 const CORE = '@earendil-works/pi-coding-agent', WEB = '@playwright/cli';
@@ -127,7 +128,7 @@ export async function updateDependencies(checkout, { agent = agentDirectory(), n
     const warn = name => { warnings.push(name); log(`[pi update] ${name}: update unavailable/failed; continuing with installed dependencies. Use PI_AUTO_UPDATE=0 to bypass.`); };
     try { await checkoutUpdate(checkout, { run, log }); }
     catch { warn('.rcs'); }
-    const settings = JSON.parse(await readFile(join(checkout, 'pi/settings.json'), 'utf8'));
+    const settings = syncSettings(checkout, agent);
     const sources = (settings.packages || []).map(entry => typeof entry === 'string' ? entry : entry.source);
     // Follow stable releases for every unpinned npm package, including filtered
     // entries. Explicit versions/refs and local paths remain owner-managed.

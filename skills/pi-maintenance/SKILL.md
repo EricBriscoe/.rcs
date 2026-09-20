@@ -4,14 +4,14 @@ description: Configure or develop this Pi harness, its extensions, tools, launch
 ---
 # Pi maintenance
 
-Resolve `${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/settings.json` to `<checkout>/pi/settings.json`. Work there; inspect Git status and preserve changes.
+Shared defaults live in `<checkout>/pi/settings.json`; `${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/settings.json` is a local writable file, not a symlink. Edit checkout defaults for shared changes. Setup/launch reconcile against local `settings-defaults.json`, preserving overrides and runtime state. Inspect Git status and preserve changes.
 
 | Source | Purpose |
 |---|---|
 | `pi/settings.json`, `pi/models.json`, `AGENTS.md` | Defaults, model budgets, shared harness instructions |
 | `pi/version`, `pi/playwright-version`, `pi/rtk.json` | Bootstrap/recovery versions |
 | `pi/extensions/<name>/` | Native extension and adjacent README |
-| `pi/launch.mjs`, `pi/update-deps.mjs`, `pi/rtk.mjs` | Launch-time updates and shared RTK |
+| `pi/launch.mjs`, `pi/settings.mjs`, `pi/update-deps.mjs`, `pi/rtk.mjs` | Launch-time updates and shared RTK |
 | `skills/` | Shared skills, linked for Pi, Codex, and Claude |
 | `setup-pi.sh`, `tests/`, `README.md` | Installation, regression tests, usage |
 
@@ -23,7 +23,7 @@ Codex models keep Pi's built-in 272,000 context window so compaction lands befor
 
 Launch updates: fast-forward pull clean `.rcs` main/master from its matching remote upstream, skipping active Git operations. No hooks/stash/rebase/reset/push. Then update stable Pi, all unpinned npm packages in `pi/settings.json`, Playwright/Chromium, RTK and proper-lockfile. No CI gate, Node/Homebrew upgrades or session restarts. npm scripts are disabled except for explicit pi-knowledge install/update operations, which need native dependencies. Verify RTK checksums. Dependency state: agent-directory `updates/`, not `.rcs`. Failures warn/continue/retry next launch; no guaranteed rollback.
 
-Recovery: `PI_AUTO_UPDATE=0 pi --no-extensions` or `--offline`. Nested/child launches skip updates. `PI_AUTO_UPDATE=0 ./setup-pi.sh` uses bootstrap core/browser versions; `--skip-install` only relinks.
+Recovery: `PI_AUTO_UPDATE=0 pi --no-extensions` or `--offline`. Nested/child launches skip updates. `PI_AUTO_UPDATE=0 ./setup-pi.sh` uses bootstrap core/browser versions; `--skip-install` reconciles settings and relinks resources.
 
 From the checkout:
 

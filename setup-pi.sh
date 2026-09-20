@@ -71,7 +71,7 @@ pi_agent_dir="$(cd "$pi_agent_dir" && pwd)"
 backup_root="$pi_agent_dir"
 source "$REPO/setup-common.sh"
 
-link_resource "$REPO/pi/settings.json" "$pi_agent_dir/settings.json" settings
+node "$REPO/pi/settings.mjs"
 link_resource "$REPO/pi/models.json" "$pi_agent_dir/models.json" models
 link_resource "$REPO/AGENTS.md" "$pi_agent_dir/AGENTS.md" instructions
 link_resource "$REPO/pi/SUBAGENTS.md" "$pi_agent_dir/SUBAGENTS.md" instructions
@@ -110,7 +110,7 @@ if ! "$skip_install"; then
     const source = typeof p === "string" ? p : p?.source;
     if (typeof source !== "string" || !source || /[\r\n]/.test(source)) throw new Error("Expected a package source string");
     return source;
-  }).join("\n")' "$REPO/pi/settings.json")"
+  }).join("\n")' "$pi_agent_dir/settings.json")"
   while IFS= read -r package; do
     [[ -n "$package" ]] || continue
     # pi-knowledge needs native SQLite, tree-sitter and ONNX install scripts.
@@ -123,7 +123,7 @@ if ! "$skip_install"; then
   fi
 fi
 
-printf 'Pi settings linked to %s/pi/settings.json\n' "$REPO"
+printf 'Pi local settings reconciled with %s/pi/settings.json\n' "$REPO"
 printf 'Pi web tools linked to %s/pi/extensions/web\n' "$REPO"
 printf 'Pi owned extensions and Quiet Graphite/Paper themes linked from %s/pi/\n' "$REPO"
 printf 'Pi-native launcher linked to %s/bin/pi\n' "$pi_agent_dir"

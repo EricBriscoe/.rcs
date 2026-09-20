@@ -59,7 +59,7 @@ test('only explicit stock knowledge package operations enable install scripts', 
 
 test('real launcher invokes updater every time, bypasses it for repair and preserves stock argv', async t => {
   const f = await fixture(t), count = join(f.root, 'checks');
-  for (const path of ['launch.mjs', 'native-resources.mjs', 'extensions/efficiency/runtime.mjs']) {
+  for (const path of ['launch.mjs', 'settings.mjs', 'native-resources.mjs', 'extensions/efficiency/runtime.mjs']) {
     await mkdir(join(f.checkout, 'pi', path, '..'), { recursive: true });
     await cp(new URL('../pi/' + path, import.meta.url), join(f.checkout, 'pi', path));
   }

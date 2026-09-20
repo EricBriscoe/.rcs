@@ -5,13 +5,17 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { constants } from "node:os";
 import { nativeEnvironment } from "./native-resources.mjs";
+import { syncSettings } from "./settings.mjs";
 import { autoUpdateEnabled, packageInstallEnvironment } from "./extensions/efficiency/runtime.mjs";
 
 const checkout = dirname(dirname(realpathSync(fileURLToPath(import.meta.url))));
+// Detach legacy settings links even when updates are disabled.
+syncSettings(checkout);
 if (autoUpdateEnabled(process.argv.slice(2))) {
   try { const { updateDependencies } = await import("./update-deps.mjs"); await updateDependencies(checkout); }
   catch { console.error("Pi dependency update failed. Continuing with installed versions; PI_AUTO_UPDATE=0 bypasses updates."); }
 }
+syncSettings(checkout);
 const packageRoot = execFileSync("npm", ["root", "-g"], { encoding: "utf8" }).trim();
 const cli = join(packageRoot, "@earendil-works/pi-coding-agent/dist/cli.js");
 // Only this explicit package operation may run native dependency install scripts.
