@@ -72,6 +72,7 @@ backup_root="$pi_agent_dir"
 source "$REPO/setup-common.sh"
 
 node "$REPO/pi/settings.mjs"
+node "$REPO/pi/global-ignore.mjs"
 link_resource "$REPO/pi/models.json" "$pi_agent_dir/models.json" models
 link_resource "$REPO/AGENTS.md" "$pi_agent_dir/AGENTS.md" instructions
 link_resource "$REPO/pi/SUBAGENTS.md" "$pi_agent_dir/SUBAGENTS.md" instructions
