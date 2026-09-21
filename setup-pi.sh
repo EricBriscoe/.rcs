@@ -103,6 +103,8 @@ for skill in "$REPO"/skills/*/; do
   skill="$(basename "$skill")"
   link_resource "$REPO/skills/$skill" "$pi_agent_dir/skills/$skill" skill
 done
+# Pin only Pi, not the user's project Node version or shell PATH.
+node -e 'require("node:fs").writeFileSync(process.argv[1], process.execPath + "\n", { mode: 0o600 })' "$pi_agent_dir/runtime-node"
 link_resource "$REPO/pi/launch.mjs" "$pi_agent_dir/bin/pi" launcher
 link_resource "$REPO/pi/rtk.mjs" "$pi_agent_dir/bin/rtk" launcher
 link_resource "$REPO/pi/rtk.mjs" "$HOME/.local/bin/rtk" launcher

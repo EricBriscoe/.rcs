@@ -30,7 +30,7 @@ Subscription usage is almost entirely input context, so the harness keeps the pr
 
 Vim prompt editing is enabled: `Esc` enters Normal mode; `i` returns to Insert. Motions, text objects, visual mode, `u` undo, and `Ctrl+r` redo work. In Normal mode, `:codex-pool` opens account settings.
 
-The Pi launcher pulls `.rcs` before updating dependencies and unpinned npm packages; [safeguards](skills/pi-maintenance/SKILL.md). Repair: `PI_AUTO_UPDATE=0 pi --no-extensions`. Trusted workspace context includes `.pi/AGENTS.md`.
+Setup pins Pi to its Node executable in `~/.pi/agent/runtime-node`; project Node versions and shell PATH remain unchanged. Rerun setup to change Pi’s runtime. The updater checks native SQLite and repairs incompatible binaries even when package versions are unchanged. The Pi launcher pulls `.rcs` before updating dependencies and unpinned npm packages; [safeguards](skills/pi-maintenance/SKILL.md). Repair: `PI_AUTO_UPDATE=0 pi --no-extensions`. Trusted workspace context includes `.pi/AGENTS.md`.
 
 | Feature | Usage / reference |
 |---|---|
@@ -52,7 +52,7 @@ The Pi launcher pulls `.rcs` before updating dependencies and unpinned npm packa
 
 `web_browse`/`web_search` remain isolated Playwright fallbacks, without Chrome cookies. Login/CAPTCHA needs human input. `headed: true` shows the fallback browser; close before changing mode.
 
-`pi-knowledge` uses local embeddings and machine-local storage (`~/.pi/knowledge/` by default). No sources are indexed by setup. The launcher disables automatic context injection; upstream still appends a KB inventory to the prompt, which can change after indexing. Native dependency install scripts are enabled only for explicit `pi install npm:pi-knowledge` / `pi update npm:pi-knowledge` operations and its automatic package update. Other package scripts remain disabled. Indexed symbols are not LSP references; read current source before editing. Retired navigation caches remain inert on disk; setup removes only owned extension links.
+`pi-knowledge` uses local embeddings and machine-local storage (`~/.pi/knowledge/` by default). No sources are indexed by setup. The launcher disables automatic context injection; upstream still appends a KB inventory to the prompt, which can change after indexing. Native dependency install scripts are enabled only for explicit `pi install npm:pi-knowledge` / `pi update npm:pi-knowledge` operations and its automatic package update or SQLite repair. Other package scripts remain disabled. Indexed symbols are not LSP references; read current source before editing. Retired navigation caches remain inert on disk; setup removes only owned extension links.
 
 Keep credentials and runtime data outside Git/Obsidian. Permissions are not encryption or a sandbox. Restart after setup; `/reload` refreshes loaded resources.
 

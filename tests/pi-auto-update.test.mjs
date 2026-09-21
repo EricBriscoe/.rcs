@@ -87,6 +87,17 @@ test('real launcher invokes updater every time, bypasses it for repair and prese
   const failed = await launch(['--version']);
   assert.match(failed.stderr, /dependency update failed/); assert.doesNotMatch(failed.stderr, /PRIVATE_UPDATER_FAILURE/);
   assert.deepEqual(JSON.parse(failed.stdout).args, ['--version']);
+  const runtime = join(f.root, 'pinned node');
+  await f.put(runtime, '#!/bin/sh\nprintf "pinned\\n%s\\n%s\\n" "$2" "$PATH"\n');
+  await chmod(runtime, 0o700);
+  await f.put(join(f.agent, 'runtime-node'), runtime + '\n');
+  const pinned = await launch(['--version'], { PI_AUTO_UPDATE: '0' });
+  assert.equal(pinned.stdout, `pinned\n--version\n${env.PATH}\n`, 'runtime pin wins without changing the project PATH');
+  await rm(runtime);
+  await assert.rejects(launch(['--version']), error => {
+    assert.match(error.stderr, /configured Node runtime is unavailable/);
+    return true;
+  });
 });
 
 test('updates only owned dependencies, uses stock package update and leaves checked-in definitions untouched', async t => {
@@ -109,6 +120,37 @@ test('updates only owned dependencies, uses stock package update and leaves chec
   assert.equal(f.metadata(), count * 2, 'no daily TTL: check again immediately');
   assert.ok(!f.calls.some(([cmd, args]) => cmd === 'npm' && args[0] === 'install'));
   assert.ok(!f.calls.some(([cmd]) => cmd === process.execPath || cmd === 'playwright-cli'));
+});
+
+test('knowledge native repair runs even with unchanged versions and unavailable registry metadata', async t => {
+  const f = await fixture(t);
+  await f.put(join(f.checkout, 'pi/settings.json'), { packages: ['npm:pi-knowledge'] });
+  const run = f.options.run;
+  let probes = 0;
+  f.options.npmLatest = async () => { throw Error('offline'); };
+  f.options.run = async (cmd, args, opts) => {
+    if (cmd === process.execPath && args[0] === '-e') {
+      probes++;
+      if (probes === 1) throw Error('ABI mismatch');
+    }
+    return run(cmd, args, opts);
+  };
+  const result = await updateDependencies(f.checkout, f.options);
+  assert.equal(probes, 2);
+  const rebuild = f.calls.find(([cmd, args]) => cmd === 'npm' && args[0] === 'rebuild');
+  assert.deepEqual(rebuild[1], ['rebuild', '--prefix', join(f.agent, 'npm'), '--ignore-scripts=false', 'better-sqlite3']);
+  assert.equal(rebuild[2].cwd, join(f.agent, 'updates'));
+  assert.equal(rebuild[2].env.npm_config_ignore_scripts, 'false');
+  assert.ok(!result.warnings.includes('pi-knowledge native SQLite'));
+  f.calls.length = 0;
+  await updateDependencies(f.checkout, f.options);
+  assert.ok(!f.calls.some(([cmd, args]) => cmd === 'npm' && args[0] === 'rebuild'), 'healthy runtime is not rebuilt');
+  f.options.run = async (cmd, args, opts) => {
+    if (cmd === process.execPath && args[0] === '-e') throw Error('ABI mismatch');
+    return run(cmd, args, opts);
+  };
+  const failed = await updateDependencies(f.checkout, f.options);
+  assert.ok(failed.warnings.includes('pi-knowledge native SQLite'), 'failed repair warns without preventing launch');
 });
 
 test('checkout sync runs under the lock before reading dependency definitions; failures are nonfatal', async t => {

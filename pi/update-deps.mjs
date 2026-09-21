@@ -52,7 +52,7 @@ export async function latestRtk(request = fetch) {
 }
 async function command(command, args, options = {}) {
   return exec(command, args, { timeout: 180000, maxBuffer: 1024 * 1024, ...options, env: {
-    ...process.env, ...options.env, PI_AUTO_UPDATE_ACTIVE: '1', npm_config_ignore_scripts: options.env?.npm_config_ignore_scripts ?? 'true', npm_config_audit: 'false', npm_config_fund: 'false', npm_config_fetch_retries: '0', npm_config_fetch_timeout: '15000',
+    ...process.env, ...options.env, PATH: `${dirname(process.execPath)}:${options.env?.PATH ?? process.env.PATH ?? ''}`, PI_AUTO_UPDATE_ACTIVE: '1', npm_config_ignore_scripts: options.env?.npm_config_ignore_scripts ?? 'true', npm_config_audit: 'false', npm_config_fund: 'false', npm_config_fetch_retries: '0', npm_config_fetch_timeout: '15000',
   } });
 }
 
@@ -162,6 +162,18 @@ export async function updateDependencies(checkout, { agent = agentDirectory(), n
     for (const name of packages) await install(name, join(agent, 'npm/node_modules', name, 'package.json'), () =>
       run(process.execPath, [join(global, CORE, 'dist/cli.js'), 'update', `npm:${name}`], { cwd: directory,
         env: { ...env, ...packageInstallEnvironment(`npm:${name}`) } }));
+    // Package versions alone cannot detect binaries left behind by a Node upgrade.
+    if (packages.includes('pi-knowledge')) {
+      const probe = () => run(process.execPath, ['-e', 'const Database = require(process.argv[1]); new Database(":memory:").close();', join(agent, 'npm/node_modules/better-sqlite3')], { cwd: directory, env });
+      try {
+        try { await probe(); }
+        catch {
+          log('[pi update] repairing pi-knowledge native SQLite for the Pi runtime');
+          await run('npm', ['rebuild', '--prefix', join(agent, 'npm'), '--ignore-scripts=false', 'better-sqlite3'], { cwd: directory, env: { ...env, ...packageInstallEnvironment('npm:pi-knowledge') } });
+          await probe();
+        }
+      } catch { warn('pi-knowledge native SQLite'); }
+    }
     // --no-save/--package-lock=false keeps the bootstrap manifest and lockfile unchanged.
     const pool = join(checkout, 'pi/extensions/codex-account-pool');
     await install(LOCK, join(pool, 'node_modules', LOCK, 'package.json'), () => run('npm', ['install', '--ignore-scripts', '--no-save', '--package-lock=false', `${LOCK}@${latest[LOCK]}`], { cwd: pool, env }));
