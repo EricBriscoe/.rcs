@@ -16,8 +16,8 @@ export function cacheWindowMs(settings) {
  * Cache-aware account choice. Subscription usage is almost entirely input
  * context, and every account switch re-reads the whole conversation on the new
  * account. So the account that served the last request stays first while the
- * cache is warm; ranking by headroom only decides at cold boundaries: the first
- * request, an idle gap past the window, or after a failover.
+ * cache is warm; stored primary/fallback priority decides at cold boundaries.
+ * Once the fallback is idle, an eligible primary takes over again.
  */
 export function createRouter({ cacheWindowMs: windowMs = cacheWindowMs(), keyOf = accountId => accountId } = {}) {
   let last;

@@ -4,7 +4,6 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import lockfile from "proper-lockfile";
-import { quotaHeadroom } from "./quota.mjs";
 
 const STATE_VERSION = 1;
 const REFRESH_SKEW_MS = 5 * 60 * 1000;
@@ -144,17 +143,9 @@ export function eligibleAccounts(state, now = Date.now()) {
   return state.accounts.filter(account => account.enabled && (!account.exhausted || (typeof account.resetAt === "number" && account.resetAt <= now)));
 }
 
-/** Remaining percentage on the account's tightest window; unknown usage counts as full so a fresh account gets probed. */
-export function accountHeadroom(account) {
-  return quotaHeadroom(account.quota) ?? 100;
-}
-
-/** Eligible accounts, most headroom first; the stored priority order breaks ties. */
+/** Eligible accounts in stored primary/fallback priority order. */
 export function rankedAccounts(state, now = Date.now()) {
-  return eligibleAccounts(state, now)
-    .map((account, index) => ({ account, index }))
-    .sort((a, b) => accountHeadroom(b.account) - accountHeadroom(a.account) || a.index - b.index)
-    .map(entry => entry.account);
+  return eligibleAccounts(state, now);
 }
 
 export function allExhaustedMessage(state, now = Date.now()) {

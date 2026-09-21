@@ -8,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 
 import {
-  accountHeadroom, addAccount, eligibleAccounts, emptyState, isModelAccessError, loginAndAdd,
+  addAccount, eligibleAccounts, emptyState, isModelAccessError, loginAndAdd,
   isQuotaExhaustion, markExhausted, quotaResetAt, rankedAccounts, readPoolState, replaceAccountCredentials,
   resolveAccount, shouldFailover, updatePoolState,
 } from "../pi/extensions/codex-account-pool/pool.mjs";
@@ -85,7 +85,7 @@ test("quota displays official usage windows without token-budget inference", () 
   assert.doesNotMatch(formatQuota(quota), /token|budget/i);
 });
 
-test("headroom is the tightest window across every limit; limit-reached is zero; unknown is full", () => {
+test("headroom is the tightest window across every limit; limit-reached is zero", () => {
   const quota = { fetchedAt: 1, windows: [
     { limitId: "codex", primary: { usedPercent: 30, windowDurationMins: 300, resetsAt: 10 }, secondary: { usedPercent: 62, windowDurationMins: 10_080, resetsAt: 20 } },
     { limitId: "codex_other", label: "Other", primary: { usedPercent: 10 } },
@@ -97,12 +97,10 @@ test("headroom is the tightest window across every limit; limit-reached is zero;
   assert.equal(quotaHeadroom({ fetchedAt: 1, windows: [{ limitId: "codex", limitReached: true, primary: { usedPercent: 40 } }] }), 0);
   assert.equal(quotaHeadroom({ fetchedAt: 1, windows: [{ limitId: "codex", allowed: false, primary: { usedPercent: 0 } }] }), 0);
   assert.deepEqual(bindingWindow({ fetchedAt: 1, windows: [{ limitId: "codex_x", label: "X", primary: { usedPercent: 5 } }] }), { percent: 95, name: "X primary", resetsAt: undefined });
-  assert.equal(accountHeadroom({ quota }), 38);
-  assert.equal(accountHeadroom({}), 100, "an account with no usage data counts as full");
   assert.match(compactQuota({ fetchedAt: Date.now(), windows: [{ limitId: "codex", limitReached: true, primary: { usedPercent: 100, resetsAt: 1_700_000_000 } }] }), /^0% left \(codex limit reached\) · 2023-11-14T22:13:20\.000Z$/);
 });
 
-test("ranked routing prefers headroom, probes unknown accounts, keeps exhausted ones out, and breaks ties by priority", () => {
+test("routing preserves primary/fallback priority regardless of budget or unknown usage", () => {
   const usage = (percent, extra = {}) => ({ fetchedAt: 1, windows: [{ limitId: "codex", primary: { usedPercent: 100 - percent }, secondary: { usedPercent: 0 }, ...extra }] });
   const state = { version: 1, enabled: true, accounts: [
     { ...account("low"), quota: usage(20) },
@@ -112,24 +110,25 @@ test("ranked routing prefers headroom, probes unknown accounts, keeps exhausted 
     { ...account("exhausted"), quota: usage(90), exhausted: true, resetAt: Number.MAX_SAFE_INTEGER },
     { ...account("off"), quota: usage(99), enabled: false },
   ] };
-  assert.deepEqual(rankedAccounts(state, 5).map(value => value.label), ["fresh", "high", "tied-later", "low"]);
+  assert.deepEqual(rankedAccounts(state, 5).map(value => value.label), ["low", "high", "fresh", "tied-later"]);
   assert.deepEqual(rankedAccounts({ ...state, enabled: false }, 5), []);
   assert.deepEqual(eligibleAccounts(state, 5).map(value => value.label), ["low", "high", "fresh", "tied-later"], "eligibility keeps priority order for callers that need it");
 });
 
-test("router sticks to the warm account, re-ranks at cold boundaries, and restores from session entries", () => {
+test("router keeps a warm fallback, returns to primary when idle, and restores session affinity", () => {
   const usage = percent => ({ fetchedAt: 1, windows: [{ limitId: "codex", primary: { usedPercent: 100 - percent } }] });
   const state = { version: 1, enabled: true, accounts: [{ ...account("a"), quota: usage(40) }, { ...account("b"), quota: usage(90) }] };
   const router = createRouter({ cacheWindowMs: 10 * 60_000, keyOf: id => `key-${id}` });
-  assert.deepEqual(router.order(state, 1_000).map(value => value.label), ["b", "a"], "first request goes to the most headroom");
-  router.served("a", 1_000);
-  assert.deepEqual(router.order(state, 1_000 + 9 * 60_000).map(value => value.label), ["a", "b"], "warm cache keeps the serving account first despite less headroom");
-  assert.deepEqual(router.order(state, 1_000 + 10 * 60_000).map(value => value.label), ["b", "a"], "an idle gap past the window re-ranks");
+  assert.deepEqual(router.order(state, 1_000).map(value => value.label), ["a", "b"], "first request uses primary despite lower budget");
+  router.served("b", 1_000);
+  assert.deepEqual(router.order(state, 1_000 + 9 * 60_000).map(value => value.label), ["b", "a"], "warm fallback stays first even when primary is eligible again");
+  assert.deepEqual(router.order(state, 1_000 + 10 * 60_000).map(value => value.label), ["a", "b"], "idle boundary returns to primary");
   router.served("a", 2_000);
   const exhausted = { ...state, accounts: state.accounts.map(value => value.label === "a" ? { ...value, exhausted: true, resetAt: Number.MAX_SAFE_INTEGER } : value) };
   assert.deepEqual(router.order(exhausted, 3_000).map(value => value.label), ["b"], "an exhausted sticky account drops out and failover walks the ranking");
+  router.served("b", 2_000);
   router.setWindow(1_000);
-  assert.deepEqual(router.order(state, 3_500).map(value => value.label), ["b", "a"], "a shorter window from settings applies immediately");
+  assert.deepEqual(router.order(state, 3_500).map(value => value.label), ["a", "b"], "a shorter window from settings applies immediately");
   const keys = new Map([["resp-1", "key-b"], ["resp-2", "key-a"]]);
   const entries = [
     { type: "message", timestamp: "2026-09-16T00:00:00.000Z", message: { role: "assistant", responseId: "resp-1", timestamp: 5_000 } },
@@ -141,7 +140,7 @@ test("router sticks to the warm account, re-ranks at cold boundaries, and restor
   router.setWindow(10 * 60_000);
   assert.deepEqual(router.order(state, 6_500).map(value => value.label), ["a", "b"], "a resumed session keeps its warm account");
   assert.equal(router.restore([], keys), undefined);
-  assert.deepEqual(router.order(state, 6_500).map(value => value.label), ["b", "a"]);
+  assert.deepEqual(router.order(state, 6_500).map(value => value.label), ["a", "b"]);
   assert.equal(cacheWindowMs({ efficiency: { idleCompactMinutes: 25 } }), 25 * 60_000);
   assert.equal(cacheWindowMs({ efficiency: { idleCompactMinutes: 0 } }), 10 * 60_000, "a disabled idle compaction still leaves the default cache assumption");
   assert.equal(cacheWindowMs(undefined), 10 * 60_000);
