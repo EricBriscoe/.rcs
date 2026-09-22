@@ -17,7 +17,7 @@ test('external usage deltas are computed against the last cumulative update per 
 });
 
 test('the summarizer model comes from contextPrune settings, else the session model', () => {
-  assert.deepEqual(summarizerModel({ contextPrune: { summarizerModel: 'openai-codex/gpt-5.6-luna' } }, { provider: 'openai-codex', id: 'gpt-6-astra' }), { provider: 'openai-codex', model: 'gpt-5.6-luna' });
+  assert.deepEqual(summarizerModel({ contextPrune: { summarizerModel: 'openai-codex/gpt-6-luna' } }, { provider: 'openai-codex', id: 'gpt-6-astra' }), { provider: 'openai-codex', model: 'gpt-6-luna' });
   assert.deepEqual(summarizerModel({ contextPrune: { summarizerModel: 'default' } }, { provider: 'openai-codex', id: 'gpt-6-astra' }), { provider: 'openai-codex', model: 'gpt-6-astra' });
   assert.deepEqual(summarizerModel({}, undefined), { provider: 'unknown', model: 'unknown' });
 });
@@ -27,7 +27,7 @@ test('the efficiency extension records pi-condense cost events as external-usage
   const { clearExtensionCache, loadExtensionsCached } = await import(pathToFileURL(join(packageDir, 'dist/core/extensions/loader.js')).href);
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pi external usage ')));
   const agent = join(root, 'agent'); await mkdir(agent);
-  await writeFile(join(agent, 'settings.json'), JSON.stringify({ contextPrune: { summarizerModel: 'openai-codex/gpt-5.6-luna' } }));
+  await writeFile(join(agent, 'settings.json'), JSON.stringify({ contextPrune: { summarizerModel: 'openai-codex/gpt-6-luna' } }));
   const previous = process.env.PI_CODING_AGENT_DIR; process.env.PI_CODING_AGENT_DIR = agent;
   const handlers = new Map();
   const bus = { on(channel, handler) { handlers.set(channel, [...(handlers.get(channel) ?? []), handler]); return () => {}; }, emit(channel, data) { for (const handler of handlers.get(channel) ?? []) handler(data); } };
@@ -44,7 +44,7 @@ test('the efficiency extension records pi-condense cost events as external-usage
   bus.emit('cost:external', { source: 'pi-condense', inputTokens: 1500, outputTokens: 200, totalCost: 0.0005 });
   const usage = entries.filter(([type]) => type === 'external-usage').map(([, data]) => data);
   assert.deepEqual(usage, [
-    { source: 'pi-condense', provider: 'openai-codex', model: 'gpt-5.6-luna', usage: { input: 900, output: 120, cacheRead: 0, cacheWrite: 0, cost: 0.0003 } },
-    { source: 'pi-condense', provider: 'openai-codex', model: 'gpt-5.6-luna', usage: { input: 600, output: 80, cacheRead: 0, cacheWrite: 0, cost: 0.0002 } },
+    { source: 'pi-condense', provider: 'openai-codex', model: 'gpt-6-luna', usage: { input: 900, output: 120, cacheRead: 0, cacheWrite: 0, cost: 0.0003 } },
+    { source: 'pi-condense', provider: 'openai-codex', model: 'gpt-6-luna', usage: { input: 600, output: 80, cacheRead: 0, cacheWrite: 0, cost: 0.0002 } },
   ], 'one entry per real delta; an unchanged update writes nothing');
 });

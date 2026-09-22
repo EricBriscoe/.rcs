@@ -30,8 +30,8 @@ test('replacement tracks upstream updates with cost-tiered roles and no model al
   assert.deepEqual(settings.subagents, {
     defaultModel: 'openai-codex/gpt-5.6-terra', defaultThinking: 'medium',
     agentOverrides: {
-      scout: { model: 'openai-codex/gpt-5.6-luna', thinking: 'low' },
-      researcher: { model: 'openai-codex/gpt-5.6-luna', thinking: 'medium' },
+      scout: { model: 'openai-codex/gpt-6-luna', thinking: 'low' },
+      researcher: { model: 'openai-codex/gpt-6-luna', thinking: 'medium' },
       reviewer: { model: 'inherit' }, oracle: { model: 'inherit' },
     },
   });
@@ -115,7 +115,7 @@ export default function(pi) { pi.registerCommand('replacement-probe', { handler:
       assert.ok(!result.commands.includes('orchestrate'));
       const scout = result.agents.find(a=>a.name==='scout'), worker = result.agents.find(a=>a.name==='worker');
       assert.ok(scout && worker, 'builtin scout and worker discovered');
-      assert.equal(scout.model, 'openai-codex/gpt-5.6-luna', 'scout is routed to the cheapest tier');
+      assert.equal(scout.model, 'openai-codex/gpt-6-luna', 'scout is routed to the cheapest tier');
       assert.ok([undefined, 'inherit', 'openai-codex/gpt-5.6-terra'].includes(worker.model), `worker uses the Terra default, got ${worker.model}`);
       assert.ok(result.skills.length > 0, 'stock package skills load without custom filtering');
     });
