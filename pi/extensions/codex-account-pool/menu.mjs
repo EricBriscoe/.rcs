@@ -1,7 +1,7 @@
 import { compactQuota } from './quota.mjs';
 import { isQuotaCooldown } from './pool.mjs';
 
-export const POOL_HELP = 'Pool accounts use your ChatGPT subscription. Add an account, sign in, then enable the pool. Requests stay on the account that served this session while the provider cache is warm (about ten minutes), because switching re-reads the whole conversation. When the cache is cold, the account with the most headroom on its tightest limit goes first; priority breaks ties. Failover to the next account happens only when quota is exhausted before a response starts. Re-login refreshes the same account. Remove deletes its saved pool login. Pi /login and /logout use a separate store; disable the pool to use those instead.';
+export const POOL_HELP = 'Pool accounts use your ChatGPT subscription. Add an account, sign in, then enable the pool. Requests stay on the account that served this session while the provider cache is warm (about ten minutes), because switching re-reads the whole conversation. When the cache is cold, the primary account goes first, followed by backups in priority order. Failover to the next account happens only when quota is exhausted before a response starts. Re-login refreshes the same account. Remove deletes its saved pool login. Pi /login and /logout use a separate store; disable the pool to use those instead.';
 
 async function pick(ctx, title, choices) {
   const selected = await ctx.ui.select(title, choices.map(choice => choice.label), { signal: ctx.signal });
@@ -39,7 +39,7 @@ export async function openPoolMenu(ctx, { readState, execute: perform }) {
       { label: 'How login, logout, and failover work', value: 'help' },
       { label: 'Done', value: 'done' },
     ];
-    const choice = await pick(ctx, `Codex accounts · pool ${state.enabled ? 'enabled' : 'disabled'}\n${state.accounts.length ? 'Choose an account to manage it. Most headroom goes first when the cache is cold; priority breaks ties.' : 'No accounts yet. Add one to get started.'}`, choices);
+    const choice = await pick(ctx, `Codex accounts · pool ${state.enabled ? 'enabled' : 'disabled'}\n${state.accounts.length ? 'Choose an account to manage it. The primary account goes first when the cache is cold; backups follow in priority order.' : 'No accounts yet. Add one to get started.'}`, choices);
     if (choice === undefined || choice === 'done' || ctx.signal?.aborted) return;
     try {
       if (choice === 'help') { ctx.ui.notify(POOL_HELP, 'info'); continue; }

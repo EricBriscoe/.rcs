@@ -46,7 +46,7 @@ function accountKey(accountId: string) {
   return createHash("sha256").update(accountId).digest("hex");
 }
 
-// Sticky while the provider cache is warm; headroom ranking decides at cold boundaries.
+// Sticky while the provider cache is warm; primary/fallback priority decides when cold.
 const router = createRouter({ keyOf: accountKey });
 
 function agentSettings() {

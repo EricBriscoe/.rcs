@@ -148,17 +148,9 @@ export function eligibleAccounts(state, now = Date.now()) {
   return state.accounts.filter(account => account.enabled && !isQuotaCooldown(account, now));
 }
 
-/** Remaining percentage on the account's tightest window; unknown usage counts as full so a fresh account gets probed. */
-export function accountHeadroom(account) {
-  return quotaHeadroom(account.quota) ?? 100;
-}
-
-/** Eligible accounts, most headroom first; the stored priority order breaks ties. */
+/** Eligible accounts in stored primary/fallback priority order. */
 export function rankedAccounts(state, now = Date.now()) {
-  return eligibleAccounts(state, now)
-    .map((account, index) => ({ account, index }))
-    .sort((a, b) => accountHeadroom(b.account) - accountHeadroom(a.account) || a.index - b.index)
-    .map(entry => entry.account);
+  return eligibleAccounts(state, now);
 }
 
 export function allExhaustedMessage(state, now = Date.now()) {

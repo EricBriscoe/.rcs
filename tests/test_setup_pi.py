@@ -63,7 +63,7 @@ class PiSetupTests(unittest.TestCase):
         self.env["BASH_ENV"] = str(bash_env)
         scripts = {
             "node": (
-                'if [ "$1" = "-p" ] || [ "${1##*/}" = "settings.mjs" ]; then exec "$PI_SETUP_REAL_NODE" "$@"; fi\n'
+                'if [ "$1" = "-p" ] || [ "$1" = "-e" ] || [ "${1##*/}" = "settings.mjs" ]; then exec "$PI_SETUP_REAL_NODE" "$@"; fi\n'
                 'if [ "$2" = "install" ]; then printf "%s\\n" pi "$2" "$3" '
                 '"npm_config_ignore_scripts=${npm_config_ignore_scripts:-}" >> "$PI_SETUP_TEST_LOG"; fi\n'
                 'if [ "${1##*/}" = "update-deps.mjs" ]; then printf "%s\\n" update-deps >> "$PI_SETUP_TEST_LOG"; fi\n'
@@ -94,6 +94,9 @@ class PiSetupTests(unittest.TestCase):
     def assert_resource_links(self):
         self.assertTrue(self.settings.is_file())
         self.assertFalse(self.settings.is_symlink())
+        runtime = (self.agent_dir / "runtime-node").read_text().strip()
+        self.assertTrue(Path(runtime).is_absolute())
+        self.assertTrue(Path(runtime).is_file())
         for link, source in (
             (self.agent_dir / "models.json", REPO / "pi/models.json"),
             (self.instructions, REPO / "AGENTS.md"),
