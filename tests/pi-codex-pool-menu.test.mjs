@@ -34,6 +34,18 @@ function fixture(steps, accounts = [], enabled = false) {
   return { state, calls, notices, ctx, service, controller, run: () => openPoolMenu(ctx, service) };
 }
 
+test('menu cooldown label agrees with routing after the reset time passes', async () => {
+  const f = fixture([(_title, choices) => {
+    assert.doesNotMatch(choices.find(choice => choice.startsWith('1. personal')), /quota cooldown/);
+    assert.match(choices.find(choice => choice.startsWith('2. work')), /quota cooldown/);
+    return 'Done';
+  }], [
+    { label: 'personal', enabled: true, exhausted: true, resetAt: Date.now() - 1000 },
+    { label: 'work', enabled: true, exhausted: true, resetAt: Date.now() + 86400000 },
+  ]);
+  await f.run();
+});
+
 test('first account setup guides naming, browser login, and explicit enablement', async () => {
   const f = fixture(['Add account', ' Personal account ', 'Open browser', 'Enable pool', 'Done']);
   await f.run();

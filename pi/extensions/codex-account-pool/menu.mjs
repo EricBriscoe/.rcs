@@ -1,4 +1,5 @@
 import { compactQuota } from './quota.mjs';
+import { isQuotaCooldown } from './pool.mjs';
 
 export const POOL_HELP = 'Pool accounts use your ChatGPT subscription. Add an account, sign in, then enable the pool. Requests stay on the account that served this session while the provider cache is warm (about ten minutes), because switching re-reads the whole conversation. When the cache is cold, the account with the most headroom on its tightest limit goes first; priority breaks ties. Failover to the next account happens only when quota is exhausted before a response starts. Re-login refreshes the same account. Remove deletes its saved pool login. Pi /login and /logout use a separate store; disable the pool to use those instead.';
 
@@ -27,7 +28,7 @@ export async function openPoolMenu(ctx, { readState, execute: perform }) {
     const choices = [
       { label: 'Add account — sign in with ChatGPT', value: 'add' },
       ...state.accounts.map((account, index) => ({
-        label: `${index + 1}. ${account.label} — ${account.enabled ? 'on' : 'off'} · ${account.exhausted ? 'quota cooldown · ' : ''}${compactQuota(account.quota)}`,
+        label: `${index + 1}. ${account.label} — ${account.enabled ? 'on' : 'off'} · ${isQuotaCooldown(account) ? 'quota cooldown · ' : ''}${compactQuota(account.quota)}`,
         value: account,
       })),
       ...(state.accounts.length ? [{ label: 'Refresh quota for all accounts', value: 'quota' }] : []),

@@ -11,9 +11,9 @@ import { dirname, join } from "node:path";
 import {
   allExhaustedMessage, isModelAccessError, isPoolAccountUnavailable, loginAndAdd,
   loginAndReplace, markExhausted, poolStatePath, quotaResetAt, readPoolState, shouldFailover, resolveAccount,
-  statusSummary, updatePoolState,
+  statusSummary, updatePoolState, recordQuotaSnapshot, recordQuotaHeaders,
 } from "./pool.mjs";
-import { compactQuota, formatQuota, normalizeQuotaPayload, mergeQuotaHeaders } from "./quota.mjs";
+import { compactQuota, formatQuota, normalizeQuotaPayload } from "./quota.mjs";
 import { cacheWindowMs, createRouter } from "./routing.mjs";
 import { createFooterController } from "./footer.mjs";
 import { openPoolMenu, POOL_HELP } from "./menu.mjs";
@@ -156,13 +156,11 @@ function pooledStream(model: Model<any>, context: Context, options: any = {}, si
         // Do not let adapter retries obscure the terminal failure evidence.
         maxRetries: 0,
         fetch: quotaEvidenceFetch(async (input, init) => {
+          const requestStartedAt = Date.now();
           const result = await (options.fetch ?? globalThis.fetch)(input, init);
           try {
             const headers = Object.fromEntries(result.headers.entries());
-            if (mergeQuotaHeaders(undefined, headers)) await updatePoolState(state => {
-              const stored = state.accounts.find(candidate => candidate.accountId === account.accountId);
-              if (stored) stored.quota = mergeQuotaHeaders(stored.quota, headers);
-            });
+            await recordQuotaHeaders(account.accountId, headers, requestStartedAt, result.ok);
           } catch { /* Passive quota capture must not break coding. */ }
           return result;
         }, response, options.signal),
@@ -253,6 +251,7 @@ async function refreshQuota(accountId: string, signal?: AbortSignal) {
   const quotaSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
   const account = await resolveAccount(accountId, officialOAuth, quotaSignal, undefined, undefined, true);
   quotaSignal.throwIfAborted();
+  const requestStartedAt = Date.now();
   const response = await fetch("https://chatgpt.com/backend-api/wham/usage", {
     method: "GET",
     headers: { Authorization: `Bearer ${account.access}`, "chatgpt-account-id": account.accountId, originator: "pi" },
@@ -260,10 +259,7 @@ async function refreshQuota(accountId: string, signal?: AbortSignal) {
   });
   if (!response.ok) throw new Error("Codex quota read was unavailable.");
   const quota = normalizeQuotaPayload(await response.json());
-  await updatePoolState(state => {
-    const stored = state.accounts.find(candidate => candidate.accountId === account.accountId);
-    if (stored) stored.quota = quota;
-  });
+  await recordQuotaSnapshot(account.accountId, quota, requestStartedAt);
   return quota;
 }
 
@@ -278,7 +274,7 @@ function statusText(state: Awaited<ReturnType<typeof readPoolState>>) {
   for (const account of summary.accounts) {
     const reset = account.resetAt ? ` reset ${new Date(account.resetAt).toISOString()}` : account.exhausted ? " reset unknown" : "";
     const stored = state.accounts.find(candidate => candidate.accountId === account.accountId);
-    lines.push(`${account.enabled ? "on" : "off"} ${account.label} — ${account.ready ? "login saved" : "quota cooldown"}${reset}; ${formatQuota(stored?.quota)}`);
+    lines.push(`${account.enabled ? "on" : "off"} ${account.label} — ${!account.enabled ? "disabled" : account.ready ? "login saved" : "quota cooldown"}${reset}; ${formatQuota(stored?.quota)}`);
   }
   if (summary.accounts.length === 0) lines.push("No accounts. Open /codex-pool to sign in.");
   return lines.join("\n");
@@ -349,7 +345,7 @@ export default async function (pi: ExtensionAPI) {
           const quota = await refreshQuota(target.accountId, ctx.signal);
           lines.push(`${target.label} — ${formatQuota(quota)}`);
         } catch {
-          // A quota read never changes credentials, eligibility, or failover state.
+          // A failed quota read must not release the account's cooldown.
           lines.push(`${target.label} — quota unavailable; ${formatQuota(target.quota)}`);
         }
       }

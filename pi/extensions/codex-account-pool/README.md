@@ -12,7 +12,7 @@ Use `enable NAME`, `disable NAME`, or `remove NAME` (confirmation required) for 
 
 Accounts are stored at `$PI_CODING_AGENT_DIR/codex-account-pool/state.json` (default `~/.pi/agent/...`) with a `0700` directory, `0600` file, atomic updates, and crash-recoverable cross-process refresh locks. Main Pi and background native subagents load the same ambient extension and share the pool. Foreground `pi-subagents` children do not load ambient provider extensions; use a background (`async`) child whenever pool routing is required.
 
-Quota reads use Codex’s `GET /backend-api/wham/usage` with account OAuth headers. Only server-reported usage and reset times are retained. Reads may refresh OAuth first; quota-read failure preserves eligibility, failover state, and cached usage.
+Quota reads use Codex’s `GET /backend-api/wham/usage` with account OAuth headers. Only server-reported usage and reset times are retained. Reads may refresh OAuth first; quota-read failure preserves eligibility, failover state, and cached usage. A fresh quota read showing available capacity clears an older quota cooldown, including after an external quota reset. It does not enable disabled accounts or override an exhaustion event observed during the read.
 
 Re-login preserves the account’s label, priority, enablement, cooldown, and quota. To change account identity, remove it and add a new account.
 
@@ -20,4 +20,4 @@ While enabled, the pool also owns pi-ai's `openai-codex-responses` API entry, so
 
 Failover occurs only before a stream starts and only for an original structured Codex 429 quota response. It never retries partial output, tool calls, network errors, authentication failures, throttling, or model-access failures. Pool requests use Codex SSE so the adapter can retain that structured pre-start evidence. A failover gets a fresh account-scoped session/cache namespace. Response provenance is persisted as a non-secret account hash; opaque reasoning/response metadata from another or unknown account is removed while preserving transcript and tool-result pairing. The installed public Codex API has no per-account model-discovery endpoint, so server acceptance of the selected normal model request is the conservative access validation.
 
-Passive official headers retain omitted quota windows.
+Automatic quota updates from successful response headers also clear older cooldowns when they refresh every known usage window and show available capacity. Partial headers retain omitted windows and cannot clear cooldowns. Menu cooldown labels use the same reset-time check as routing.

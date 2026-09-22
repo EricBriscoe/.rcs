@@ -10,9 +10,10 @@ import test from "node:test";
 import {
   accountHeadroom, addAccount, eligibleAccounts, emptyState, isModelAccessError, loginAndAdd,
   isQuotaExhaustion, markExhausted, quotaResetAt, rankedAccounts, readPoolState, replaceAccountCredentials,
-  resolveAccount, shouldFailover, updatePoolState,
+  resolveAccount, shouldFailover, updatePoolState, recordQuotaSnapshot, recordQuotaHeaders,
 } from "../pi/extensions/codex-account-pool/pool.mjs";
 import { bindingWindow, compactQuota, formatQuota, normalizeQuotaPayload, QUOTA_STALE_AFTER_MS, quotaFreshness, quotaHeadroom } from "../pi/extensions/codex-account-pool/quota.mjs";
+import { openPoolMenu } from "../pi/extensions/codex-account-pool/menu.mjs";
 import { cacheWindowMs, createRouter } from "../pi/extensions/codex-account-pool/routing.mjs";
 import { createFooterController, MAX_TIMER_DELAY_MS, nextFooterUpdateMs } from "../pi/extensions/codex-account-pool/footer.mjs";
 
@@ -56,6 +57,108 @@ test("priority, quota reset, and model compatibility routing are deterministic",
   assert.equal(shouldFailover({ started: false, status: 401, message: "unauthorized" }), false, "authentication never rotates");
   assert.equal(shouldFailover({ started: false, aborted: true, status: 429, message: JSON.stringify({ error: { code: "usage_limit_reached" } }) }), false, "aborted requests never rotate");
   assert.equal(isQuotaExhaustion(JSON.stringify({ error: { code: "rate_limit_exceeded", message: "temporary quota exceeded" } }), 429), false, "explicit throttle code wins over broad message text");
+});
+
+test("fresh restored quota releases persisted cooldown and routing without changing enablement", async t => {
+  const { path } = await fixture(t);
+  const now = Date.now();
+  for (const resetAt of [now + 86_400_000, undefined]) {
+    await updatePoolState(state => { state.enabled = true; state.accounts = [account("a")]; }, path);
+    await markExhausted("a", resetAt, path, now - 100);
+    const quota = normalizeQuotaPayload({ rate_limit: { allowed: true, primary_window: { used_percent: 0 }, secondary_window: { used_percent: 0 } } }, now);
+    assert.equal(eligibleAccounts(await readPoolState(path)).length, 0);
+    await recordQuotaSnapshot("a", quota, now - 50, path);
+    const state = await readPoolState(path);
+    assert.deepEqual(state.accounts[0].quota, JSON.parse(JSON.stringify(quota)));
+    for (const key of ["exhausted", "exhaustedAt", "resetAt"]) assert.equal(state.accounts[0][key], undefined);
+    assert.equal(rankedAccounts(state)[0].accountId, "a");
+    assert.equal((await resolveAccount("a", {}, undefined, path)).accountId, "a");
+  }
+  await updatePoolState(state => { state.enabled = false; state.accounts[0].enabled = false; }, path);
+  await markExhausted("a", now + 1000, path, now - 100);
+  await recordQuotaSnapshot("a", normalizeQuotaPayload({ rate_limit: { primary_window: { used_percent: 10 } } }, now), now - 50, path);
+  const disabled = await readPoolState(path);
+  assert.equal(disabled.enabled, false);
+  assert.equal(disabled.accounts[0].enabled, false);
+  assert.deepEqual(eligibleAccounts(disabled), []);
+});
+
+test("quota refresh retains cooldown for insufficient evidence or newer exhaustion", async t => {
+  const { path } = await fixture(t);
+  const now = Date.now();
+  const available = { fetchedAt: now, windows: [{ limitId: "codex", primary: { usedPercent: 0 } }] };
+  const cases = [
+    { ...available, windows: [] },
+    { ...available, ordinaryUsageAllowed: false },
+    { ...available, windows: [{ limitId: "codex", allowed: false, primary: { usedPercent: 0 } }] },
+    { ...available, windows: [{ limitId: "codex", limitReached: true, primary: { usedPercent: 0 } }] },
+    { ...available, windows: [{ limitId: "codex", primary: { usedPercent: 0 }, secondary: { usedPercent: 100 } }] },
+    { ...available, fetchedAt: now - QUOTA_STALE_AFTER_MS },
+  ];
+  for (const [quota, startedAt] of [...cases.map(quota => [quota, now]), [available, now - 200], [available, now - 100]]) {
+    await updatePoolState(state => { state.enabled = true; state.accounts = [account("a")]; }, path);
+    await markExhausted("a", now + 86_400_000, path, now - 100);
+    await recordQuotaSnapshot("a", quota, startedAt, path);
+    const state = await readPoolState(path);
+    assert.equal(state.accounts[0].exhausted, true);
+    assert.equal(state.accounts[0].exhaustedAt, now - 100);
+    assert.equal(state.accounts[0].resetAt, now + 86_400_000);
+    assert.deepEqual(eligibleAccounts(state), []);
+  }
+});
+
+test("existing menu quota refresh actions remove cooldown on the next menu render", async t => {
+  const { path } = await fixture(t);
+  for (const single of [false, true]) {
+    const now = Date.now();
+    await updatePoolState(state => { state.enabled = false; state.accounts = [account("personal")]; }, path);
+    await markExhausted("personal", now + 86400000, path, now - 100);
+    const selections = single ? ["1. personal", "Refresh quota"] : ["Refresh quota for all accounts"];
+    let checked = false;
+    await openPoolMenu({ hasUI: true, isIdle: () => true, ui: {
+      select: async (_title, choices) => {
+        if (selections.length) {
+          const selection = selections.shift();
+          return choices.find(choice => choice.startsWith(selection));
+        }
+        const label = choices.find(choice => choice.startsWith("1. personal"));
+        assert.match(label, /100% left/);
+        assert.doesNotMatch(label, /quota cooldown/);
+        checked = true;
+        return "Done";
+      },
+      notify: message => assert.fail(message),
+    } }, {
+      readState: () => readPoolState(path),
+      execute: async (action, args) => {
+        assert.equal(action, "quota");
+        assert.deepEqual(args, single ? ["personal"] : []);
+        await recordQuotaSnapshot("personal", normalizeQuotaPayload({ rate_limit: { allowed: true, limit_reached: false, primary_window: { used_percent: 0 } } }), now, path);
+      },
+    });
+    assert.equal(checked, true);
+    assert.equal((await readPoolState(path)).enabled, false);
+  }
+});
+
+test("automatic quota headers recover only with complete successful newer evidence", async t => {
+  const { path } = await fixture(t);
+  const now = Date.now();
+  for (const scenario of ["complete", "partial", "failed", "racing", "empty", "exhausted"]) {
+    await updatePoolState(state => {
+      state.enabled = true;
+      state.accounts = [{ ...account("a"), quota: normalizeQuotaPayload({ rate_limit: { allowed: false, limit_reached: true, primary_window: { used_percent: 100 }, secondary_window: { used_percent: 100 } } }, now - 1000) }];
+    }, path);
+    await markExhausted("a", now + 86400000, path, now - 100);
+    const headers = scenario === "empty" ? {} : { "x-codex-primary-used-percent": "0", ...(scenario === "partial" ? {} : { "x-codex-secondary-used-percent": scenario === "exhausted" ? "100" : "0" }) };
+    await recordQuotaHeaders("a", headers, scenario === "racing" ? now - 200 : now, scenario !== "failed", path);
+    const state = await readPoolState(path);
+    assert.equal(eligibleAccounts(state).length, scenario === "complete" ? 1 : 0, scenario);
+    if (scenario === "complete") {
+      assert.equal(quotaHeadroom(state.accounts[0].quota), 100);
+      assert.equal(state.accounts[0].resetAt, undefined);
+    }
+  }
 });
 
 test("explicit re-login preserves account settings and rejects a changed identity", async t => {
@@ -377,6 +480,30 @@ test("installed menu activates a model in the current session and confirms login
   const state = await readPoolState(path);
   assert.equal(state.enabled, true);
   assert.equal(state.accounts.length, 1, "declining confirmation preserves the saved login");
+});
+
+test("quota command releases cooldown after an external quota reset", { timeout: 30000 }, async t => {
+  const { root, path } = await fixture(t);
+  const agent = join(root, "agent"), cwd = join(root, "project"), probe = join(root, "quota-reset.ts");
+  await mkdir(cwd, { recursive: true });
+  await mkdir(agent, { recursive: true });
+  await writeFile(join(agent, "settings.json"), "{}");
+  await updatePoolState(state => { state.enabled = true; state.accounts = [account("a")]; }, path);
+  await markExhausted("a", Date.now() + 86_400_000, path, Date.now() - 1000);
+  await writeFile(probe, `export default function() {
+    globalThis.fetch = async (url) => {
+      if (String(url) !== 'https://chatgpt.com/backend-api/wham/usage') throw Error('Unexpected request');
+      return new Response(JSON.stringify({rate_limit:{allowed:true,limit_reached:false,primary_window:{used_percent:0},secondary_window:{used_percent:0}}}));
+    };
+  }`);
+  const run = exec(process.execPath, [cli, "--offline", "--no-session", "--no-context-files", "--approve", "-e", join(checkout, "pi/extensions/codex-account-pool"), "-e", probe, "-p", "/codex-pool quota a"], { cwd, env: { ...process.env, HOME: root, PI_CODING_AGENT_DIR: agent }, timeout: 25000 });
+  run.child.stdin.end();
+  await run;
+  const state = await readPoolState(path);
+  assert.equal(quotaHeadroom(state.accounts[0].quota), 100);
+  assert.equal(state.accounts[0].exhausted, undefined);
+  assert.equal(state.accounts[0].resetAt, undefined);
+  assert.equal(rankedAccounts(state)[0].accountId, "a");
 });
 
 test("passive secondary-only named-family headers preserve omitted primary freshness", { timeout: 30000 }, async t => {

@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import lockfile from "proper-lockfile";
-import { quotaHeadroom } from "./quota.mjs";
+import { mergeQuotaHeaders, quotaFreshness, quotaHeadroom } from "./quota.mjs";
 
 const STATE_VERSION = 1;
 const REFRESH_SKEW_MS = 5 * 60 * 1000;
@@ -130,8 +130,12 @@ export async function updatePoolState(mutator, path = poolStatePath()) {
   });
 }
 
+export function isQuotaCooldown(account, now = Date.now()) {
+  return Boolean(account.exhausted) && !(typeof account.resetAt === "number" && account.resetAt <= now);
+}
+
 export function publicAccount(account, now = Date.now()) {
-  const ready = account.enabled && (!account.exhausted || (typeof account.resetAt === "number" && account.resetAt <= now));
+  const ready = account.enabled && !isQuotaCooldown(account, now);
   return { label: account.label, accountId: account.accountId, enabled: account.enabled, exhausted: Boolean(account.exhausted), resetAt: account.resetAt, ready };
 }
 
@@ -141,7 +145,7 @@ export function statusSummary(state, now = Date.now()) {
 
 export function eligibleAccounts(state, now = Date.now()) {
   if (!state.enabled) return [];
-  return state.accounts.filter(account => account.enabled && (!account.exhausted || (typeof account.resetAt === "number" && account.resetAt <= now)));
+  return state.accounts.filter(account => account.enabled && !isQuotaCooldown(account, now));
 }
 
 /** Remaining percentage on the account's tightest window; unknown usage counts as full so a fresh account gets probed. */
@@ -177,6 +181,43 @@ export async function markExhausted(accountId, resetAt, path = poolStatePath(), 
     account.exhaustedAt = observedAt;
     if (resetAt !== undefined) account.resetAt = resetAt;
     else delete account.resetAt;
+  }, path);
+}
+
+function releaseQuotaCooldown(account, quota, requestStartedAt) {
+  // A slow usage read must not erase a quota failure observed after it started.
+  const newerThanExhaustion = account.exhaustedAt === undefined || requestStartedAt > account.exhaustedAt;
+  if (account.exhausted && newerThanExhaustion && quotaFreshness(quota).state === "current" &&
+      quota.ordinaryUsageAllowed !== false && quotaHeadroom(quota) > 0) {
+    delete account.exhausted;
+    delete account.exhaustedAt;
+    delete account.resetAt;
+  }
+}
+
+/** Full usage reads and complete successful response headers share cooldown recovery. */
+export async function recordQuotaSnapshot(accountId, quota, requestStartedAt, path = poolStatePath()) {
+  await updatePoolState(state => {
+    const account = state.accounts.find(candidate => candidate.accountId === accountId);
+    if (!account) return;
+    account.quota = quota;
+    releaseQuotaCooldown(account, quota, requestStartedAt);
+  }, path);
+}
+
+export async function recordQuotaHeaders(accountId, headers, requestStartedAt, successful, path = poolStatePath()) {
+  const fresh = mergeQuotaHeaders(undefined, headers);
+  if (!fresh) return;
+  await updatePoolState(state => {
+    const account = state.accounts.find(candidate => candidate.accountId === accountId);
+    if (!account) return;
+    // Omitted weekly/model limits cannot be treated as newly available capacity.
+    const complete = (account.quota?.windows ?? []).every(old => {
+      const current = fresh.windows.find(limit => limit.limitId === old.limitId);
+      return current && ["primary", "secondary"].every(name => !old[name] || current[name]);
+    });
+    account.quota = successful && complete ? fresh : mergeQuotaHeaders(account.quota, headers, fresh.fetchedAt);
+    if (successful && complete) releaseQuotaCooldown(account, fresh, requestStartedAt);
   }, path);
 }
 
