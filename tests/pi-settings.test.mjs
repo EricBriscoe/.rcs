@@ -6,6 +6,13 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { syncSettings } from '../pi/settings.mjs';
 
+test('main Astra conversations use xhigh while subagents retain medium thinking', () => {
+  const settings = JSON.parse(readFileSync(new URL('../pi/settings.json', import.meta.url), 'utf8'));
+  assert.equal(settings.defaultModel, 'gpt-6-astra');
+  assert.equal(settings.defaultThinkingLevel, 'xhigh');
+  assert.equal(settings.subagents.defaultThinking, 'medium');
+});
+
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'pi-settings-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
