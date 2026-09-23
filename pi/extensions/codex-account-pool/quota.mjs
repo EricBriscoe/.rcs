@@ -121,24 +121,21 @@ export function quotaHeadroom(quota) {
 }
 
 function resetCountdown(seconds, now) {
-  if (typeof seconds !== "number" || !Number.isFinite(seconds)) return "reset unknown";
+  if (typeof seconds !== "number" || !Number.isFinite(seconds)) return "?";
   const remaining = seconds * 1000 - now;
-  if (remaining <= 0) return "reset due";
+  if (remaining <= 0) return "0m";
   const minutes = Math.ceil(remaining / 60_000);
   const days = Math.floor(minutes / 1440);
   const hours = Math.floor(minutes % 1440 / 60);
-  if (days) return `reset in ${days}d${hours ? ` ${hours}h` : ""}`;
-  if (hours) return `reset in ${hours}h${minutes % 60 ? ` ${minutes % 60}m` : ""}`;
-  return `reset in ${minutes}m`;
+  if (days) return `${days}d${hours ? ` ${hours}h` : ""}`;
+  if (hours) return `${hours}h${minutes % 60 ? ` ${minutes % 60}m` : ""}`;
+  return `${minutes}m`;
 }
 
 export function compactQuota(quota, now = Date.now()) {
-  const freshness = quotaFreshness(quota, now);
-  if (freshness.state === "unknown") return "quota unknown";
   const binding = bindingWindow(quota);
-  if (!binding) return "quota unknown";
-  const stale = freshness.state === "stale" ? " stale" : "";
-  return `${binding.percent}% left (${resetCountdown(binding.resetsAt, now)})${stale}`;
+  if (!binding) return "?% · ?";
+  return `${binding.percent}% · ${resetCountdown(binding.resetsAt, now)}`;
 }
 
 /** Official codex-api rate_limits.rs header families; retain omitted windows and their age. */

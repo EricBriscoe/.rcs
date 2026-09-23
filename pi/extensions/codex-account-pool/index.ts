@@ -265,7 +265,7 @@ async function refreshQuota(accountId: string, signal?: AbortSignal) {
 
 function poolStatusLine(state: Awaited<ReturnType<typeof readPoolState>>) {
   const active = router.order(state)[0];
-  return active ? `Codex pool: ${active.label} ${compactQuota(active.quota)}` : `Codex pool: ${allExhaustedMessage(state)}`;
+  return active ? compactQuota(active.quota) : `Codex pool: ${allExhaustedMessage(state)}`;
 }
 
 function statusText(state: Awaited<ReturnType<typeof readPoolState>>) {
@@ -318,7 +318,7 @@ export default async function (pi: ExtensionAPI) {
     readState: readPoolState,
     statusLine: poolStatusLine,
     disabledStatus: "Codex pool disabled",
-    renderStatus(ctx: any, value: string | undefined) { ctx.ui.setStatus("codex-pool", value ? `${value} · /codex-pool` : value); },
+    renderStatus(ctx: any, value: string | undefined) { ctx.ui.setStatus("codex-pool", value); },
   });
   const updateFooter = footer.update;
   refreshFooter = footer.refresh;
