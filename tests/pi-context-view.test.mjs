@@ -13,7 +13,7 @@ test('context inspector is configured unpinned for the existing package updater'
   const settings = JSON.parse(await readFile(new URL('../pi/settings.json', import.meta.url), 'utf8'));
   assert.ok(settings.packages.includes('npm:pi-context-view'));
   assert.equal(settings.defaultModel, 'gpt-6-astra');
-  assert.equal(settings.defaultThinkingLevel, 'medium');
+  assert.equal(settings.defaultThinkingLevel, 'xhigh');
 });
 
 test('installed context inspector observes real turns without changing context, tools, or usage', async t => {
