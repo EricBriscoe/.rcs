@@ -24,7 +24,7 @@ Pi setup installs Node ≥22.19, ripgrep, fd, Pi, Playwright/Chromium, checksum-
 
 On each Mac, `/login openai-codex` uses your subscription; credentials stay local. `/model` or `/thinking`, then Ctrl+S, saves machine-local defaults. Push authorized commits; Pi pulls on launch.
 
-Subscription usage is almost entirely input context, so the harness keeps the prompt prefix cacheable: Codex models stay on Pi's 272K context window (compaction before OpenAI's long-context surcharge), subagents default to Terra/Luna with Astra reserved for `reviewer`/`oracle`, and cache-miss notices are on. One habit matters: prefer `/chrome authorize indefinite` over repeated 15-minute grants (each grant/expiry changes the prompt). Breaks are handled for you: after ten idle minutes the efficiency extension runs pi-condense chain compaction, since the provider cache is gone either way ([details](pi/extensions/efficiency/README.md)).
+Subscription usage is almost entirely input context, so the harness keeps the prompt prefix cacheable: Codex models stay on Pi's 272K context window (compaction before OpenAI's long-context surcharge), subagents default to Sol/Luna with Astra reserved for `reviewer`/`oracle`, and cache-miss notices are on. One habit matters: prefer `/chrome authorize indefinite` over repeated 15-minute grants (each grant/expiry changes the prompt). Breaks are handled for you: after ten idle minutes the efficiency extension runs pi-condense chain compaction, since the provider cache is gone either way ([details](pi/extensions/efficiency/README.md)).
 
 ## Pi
 
