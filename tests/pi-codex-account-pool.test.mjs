@@ -122,7 +122,7 @@ test("existing menu quota refresh actions remove cooldown on the next menu rende
           return choices.find(choice => choice.startsWith(selection));
         }
         const label = choices.find(choice => choice.startsWith("1. personal"));
-        assert.match(label, /100% left/);
+        assert.match(label, /100% · \?/);
         assert.doesNotMatch(label, /quota cooldown/);
         checked = true;
         return "Done";
