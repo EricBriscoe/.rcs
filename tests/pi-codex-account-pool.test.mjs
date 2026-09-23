@@ -182,10 +182,23 @@ test("quota displays official usage windows without token-budget inference", () 
   assert.equal(quota.ordinaryUsageAllowed, true);
   assert.deepEqual(quota.windows.map(window => window.limitId), ["codex", "codex_other"]);
   assert.match(formatQuota(quota, 1_699_999_001_000), /58% left.*95% left.*20% left/);
-  assert.match(compactQuota(quota, 1_699_999_001_000), /^20% left \(1m\) · 2023-11-15T01:00:00\.000Z$/, "compact line names the tightest window");
+  assert.match(compactQuota(quota, 1_699_999_001_000), /^20% left \(reset in 3h 4m\)$/, "compact line names the tightest window");
   assert.deepEqual(quotaFreshness(undefined), { state: "unknown" });
   assert.match(formatQuota(quota, 1_700_000_000_001), /stale/);
   assert.doesNotMatch(formatQuota(quota), /token|budget/i);
+});
+
+test("compact quota shows time until the binding reset, not the window duration", () => {
+  const now = 1_700_000_000_000;
+  const quota = seconds => ({ fetchedAt: now, windows: [{ limitId: "codex",
+    primary: { usedPercent: 10, resetsAt: now / 1000 + 60 },
+    secondary: { usedPercent: 62, windowDurationMins: 10_080, resetsAt: seconds === undefined ? undefined : now / 1000 + seconds },
+  }] });
+  for (const [seconds, expected] of [[187200, "reset in 2d 4h"], [3660, "reset in 1h 1m"], [60, "reset in 1m"], [1, "reset in 1m"], [0, "reset due"], [-60, "reset due"], [undefined, "reset unknown"]]) {
+    assert.equal(compactQuota(quota(seconds), now), `38% left (${expected})`);
+  }
+  assert.equal(compactQuota(quota(187200), now + 3600000), "38% left (reset in 2d 3h) stale");
+  assert.equal(compactQuota(undefined, now), "quota unknown");
 });
 
 test("headroom is the tightest window across every limit; limit-reached is zero", () => {
@@ -200,7 +213,7 @@ test("headroom is the tightest window across every limit; limit-reached is zero"
   assert.equal(quotaHeadroom({ fetchedAt: 1, windows: [{ limitId: "codex", limitReached: true, primary: { usedPercent: 40 } }] }), 0);
   assert.equal(quotaHeadroom({ fetchedAt: 1, windows: [{ limitId: "codex", allowed: false, primary: { usedPercent: 0 } }] }), 0);
   assert.deepEqual(bindingWindow({ fetchedAt: 1, windows: [{ limitId: "codex_x", label: "X", primary: { usedPercent: 5 } }] }), { percent: 95, name: "X primary", resetsAt: undefined });
-  assert.match(compactQuota({ fetchedAt: Date.now(), windows: [{ limitId: "codex", limitReached: true, primary: { usedPercent: 100, resetsAt: 1_700_000_000 } }] }), /^0% left \(codex limit reached\) · 2023-11-14T22:13:20\.000Z$/);
+  assert.equal(compactQuota({ fetchedAt: 1_700_000_000_000, windows: [{ limitId: "codex", limitReached: true, primary: { usedPercent: 100, resetsAt: 1_700_000_000 } }] }, 1_700_000_000_000), "0% left (reset due)");
 });
 
 test("routing preserves primary/fallback priority regardless of budget or unknown usage", () => {

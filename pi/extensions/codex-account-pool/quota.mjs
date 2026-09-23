@@ -120,13 +120,25 @@ export function quotaHeadroom(quota) {
   return bindingWindow(quota)?.percent;
 }
 
+function resetCountdown(seconds, now) {
+  if (typeof seconds !== "number" || !Number.isFinite(seconds)) return "reset unknown";
+  const remaining = seconds * 1000 - now;
+  if (remaining <= 0) return "reset due";
+  const minutes = Math.ceil(remaining / 60_000);
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor(minutes % 1440 / 60);
+  if (days) return `reset in ${days}d${hours ? ` ${hours}h` : ""}`;
+  if (hours) return `reset in ${hours}h${minutes % 60 ? ` ${minutes % 60}m` : ""}`;
+  return `reset in ${minutes}m`;
+}
+
 export function compactQuota(quota, now = Date.now()) {
   const freshness = quotaFreshness(quota, now);
   if (freshness.state === "unknown") return "quota unknown";
   const binding = bindingWindow(quota);
   if (!binding) return "quota unknown";
   const stale = freshness.state === "stale" ? " stale" : "";
-  return `${binding.percent}% left (${binding.name}) · ${timestamp(binding.resetsAt)}${stale}`;
+  return `${binding.percent}% left (${resetCountdown(binding.resetsAt, now)})${stale}`;
 }
 
 /** Official codex-api rate_limits.rs header families; retain omitted windows and their age. */
