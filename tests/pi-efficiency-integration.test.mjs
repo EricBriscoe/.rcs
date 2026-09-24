@@ -6,6 +6,12 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { usageReport } from '../pi/extensions/efficiency/usage.ts';
+import { effectiveRtk } from '../pi/extensions/efficiency/runtime.mjs';
+import { homedir } from 'node:os';
+
+const liveAgent = process.env.PI_CODING_AGENT_DIR || join(homedir(), '.pi/agent');
+const livePins = effectiveRtk(fileURLToPath(new URL('../', import.meta.url)), liveAgent);
+const liveBinary = join(liveAgent, 'tooling/rtk', livePins.version, 'rtk');
 
 const pkg = join(execFileSync('npm', ['root', '-g'], { encoding: 'utf8' }).trim(), '@earendil-works/pi-coding-agent');
 const { loadExtensionsCached, clearExtensionCache } = await import(pathToFileURL(join(pkg, 'dist/core/extensions/loader.js')));
@@ -19,6 +25,9 @@ async function fixture(t) {
   await mkdir(agent); await mkdir(cwd);
   const previous = { ...process.env };
   process.env.PI_CODING_AGENT_DIR = agent;
+  process.env.RTK_DB_PATH = join(root, 'global-rtk.db');
+  process.env.HOME = root;
+  process.env.XDG_CONFIG_HOME = join(root, 'config');
   delete process.env.RTK_DISABLED;
   delete process.env.NODE_TEST_CONTEXT; // A nested test CLI must run, not inherit the outer runner marker.
   const ctx = { cwd, isProjectTrusted: () => true, model: { id: 'fixture', provider: 'fixture' }, sessionManager: { getSessionId: () => 'foreground' }, ui: { notify: () => {} } };
@@ -64,17 +73,18 @@ test('native Bash executes once; reduction preserves raw output, side effects an
 });
 
 test('filter absence/errors keep raw results without rerunning; native full logs remain recoverable', async t => {
-  const f = await fixture(t), config = join(f.root, 'pi');
-  await mkdir(config); await writeFile(join(config, 'settings.json'), '{}'); await writeFile(join(config, 'rtk.json'), '{"version":"0.48.0"}');
-  await symlink(join(config, 'settings.json'), join(f.agent, 'settings.json'));
+  const f = await fixture(t);
+  await writeFile(join(f.agent, 'settings.json'), '{}');
+  await mkdir(join(f.agent, 'updates'));
+  await writeFile(join(f.agent, 'updates/current.json'), '{"rtk":{"version":"0.48.0"}}');
   const diff = 'diff --git a/file b/file\n' + '+long line to filter\n'.repeat(100);
   assert.equal(await f.emit('tool_result', event('git diff', diff)), undefined);
   const dir = join(f.agent, 'tooling/rtk/0.48.0'); await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, 'rtk'), '#!/bin/sh\ncat >/dev/null\nprintf "compact diff\\n"\n', { mode: 0o700 });
+  await writeFile(join(dir, 'rtk'), '#!/bin/sh\n[ "$1" = pipe ] || exit 2\ncat >/dev/null\nprintf "compact diff\\n"\n', { mode: 0o700 });
   const reduced = await f.emit('tool_result', event('git diff', diff));
   assert.match(reduced.content[0].text, /Reduced: rtk:git-diff/);
   assert.equal(await readFile(reduced.details.fullOutputPath, 'utf8'), diff);
-  await writeFile(join(dir, 'rtk'), '#!/bin/sh\ncat >/dev/null\nprintf warning >&2\nexit 2\n');
+  await writeFile(join(dir, 'rtk'), '#!/bin/sh\n[ "$1" = pipe ] || exit 2\ncat >/dev/null\nprintf warning >&2\nexit 2\n');
   assert.equal(await f.emit('tool_result', event('git diff', diff)), undefined);
   const full = join(f.root, 'native-full.log'); await writeFile(full, raw);
   const withLog = await f.emit('tool_result', { ...event('node --test', raw.slice(-1800)), details: { fullOutputPath: full } });
@@ -128,6 +138,35 @@ test('installed native grep remains searchable and truncated results keep their 
   assert.match(limited.content[0].text, /limit/i);
   assert.equal(await f.emit('tool_result', { ...limited, input, toolName: 'grep', isError: false }), undefined);
   assert.equal(await readFile(join(f.cwd, name), 'utf8'), source);
+});
+
+test('accepted Pi reductions update real global RTK gain once, including recovery metadata', { skip: process.env.PI_RTK_LIVE !== '1' }, async t => {
+  const f = await fixture(t);
+  await writeFile(join(f.agent, 'settings.json'), '{}');
+  await mkdir(join(f.agent, 'updates'));
+  await writeFile(join(f.agent, 'updates/current.json'), JSON.stringify({ rtk: livePins }));
+  const dir = join(f.agent, 'tooling/rtk', livePins.version);
+  await mkdir(dir, { recursive: true }); await symlink(liveBinary, join(dir, 'rtk'));
+  const gain = () => JSON.parse(execFileSync(liveBinary, ['gain', '--format', 'json'], { cwd: f.cwd, encoding: 'utf8' })).summary;
+  assert.equal(gain().total_commands, 0);
+  const reduced = await f.emit('tool_result', event());
+  assert.ok(reduced);
+  assert.equal(gain().total_commands, 1);
+  assert.equal(gain().total_input, Math.ceil(Buffer.byteLength(raw) / 4));
+  assert.equal(gain().total_output, Math.ceil(Buffer.byteLength(reduced.content[0].text) / 4));
+  assert.equal(await f.emit('tool_result', { ...event(), isError: true }), undefined);
+  assert.equal(await f.emit('tool_result', event('echo small', 'small')), undefined);
+  assert.equal(await f.emit('tool_result', event('rtk git status')), undefined);
+  await f.command('output', 'raw');
+  assert.equal(await f.emit('tool_result', event()), undefined);
+  assert.equal(gain().total_commands, 1);
+  await f.command('output', 'auto');
+  const diff = 'diff --git a/file b/file\n--- a/file\n+++ b/file\n@@ -1,400 +1,400 @@\n' + '-old line\n'.repeat(400) + '+new line\n'.repeat(400);
+  const filtered = await f.emit('tool_result', event('git diff', diff));
+  assert.match(filtered.content[0].text, /Reduced: rtk:git-diff/);
+  assert.equal(gain().total_commands, 2, 'pipe itself must not double count');
+  const project = JSON.parse(execFileSync(liveBinary, ['gain', '--project', '--format', 'json'], { cwd: f.cwd, encoding: 'utf8' })).summary;
+  assert.equal(project.total_commands, 2);
 });
 
 test('session usage is independent and summary events are deduplicated', async t => {

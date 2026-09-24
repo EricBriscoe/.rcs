@@ -4,7 +4,7 @@ Commands execute **unchanged, once**. [RTK](https://github.com/rtk-ai/rtk) filte
 
 Native/Bash grep groups paths without dropping matches, line numbers, whitespace or order. Monitor JSON removes formatting whitespace only. Reads, user `!`, context/truncated grep, ordinary `git log`, diagnostics, failures, complex/unknown/oversized output and non-beneficial reductions stay raw; missing RTK falls back.
 
-Filters isolate HOME/cwd and disable TOML/telemetry; commands keep their environment. No `rtk init`, hooks or history scans. Explicit RTK calls are outside this isolation.
+Filters isolate HOME/cwd and disable TOML/telemetry; commands keep their environment. No `rtk init`, hooks or history scans. RTK's missing-hook warning does not detect Pi's native integration; no hook installation is needed. Explicit RTK calls are outside this isolation.
 
 `/output raw|auto` controls Bash/search reductions for the session; `# pi:raw` bypasses one Bash result. Read the returned artifact for exact output—**never replay side effects**. Capture ≤2 MB; larger results retain native log links. At most 100 artifacts/session.
 
@@ -16,8 +16,8 @@ External usage: pi-condense's summarizer calls never become assistant messages, 
 
 Idle compaction: `efficiency.idleCompactMinutes` (default 10, `0` disables) and `efficiency.idleCompactMinTokens` (default 30000) in settings.json. After the agent settles with at least that much context, a timer waits for the provider cache to expire; if the agent is still idle with nothing queued and pi-condense is loaded, it dispatches `/pruner compact` (chain compression of all closed turns, one Luna call per multi-batch chain). The next request re-reads the context regardless, so this only makes that re-read, and everything after it, smaller. Logged as `cache-idle-compact`; the following cache diagnostic is annotated as expected.
 
-`/tokens [all]` separates provider usage from byte reductions (including recovery metadata), not subscription/billing savings. Sessions count independently; Pi `/session` and fleet own delegated totals. Failures without usage are unknown; no history import. `rtk gain` covers explicit RTK calls only.
+`/tokens [all]` separates provider usage from byte reductions (including recovery metadata), not subscription/billing savings. Sessions count independently; Pi `/session` and fleet own delegated totals. Failures without usage are unknown; no history import. `rtk gain` also counts accepted Pi Bash/search reductions as `pi <filter>`, using RTK's estimate (`ceil(bytes/4)`) after recovery metadata. These are not provider-token or billing savings. Raw/rejected results and explicit RTK calls are not counted again. No history backfill; original command duration is unknown and recorded as zero.
 
-Private state: agent-directory `efficiency/usage.sqlite`, raw output and isolated `rtk-home` (0700/0600). Logs can contain secrets, are unencrypted, and never belong in Git/Obsidian. Metadata contains no commands/prompts/source. Stop Pi before deleting state.
+Private state: agent-directory `efficiency/usage.sqlite`, raw output and isolated `rtk-home` (0700/0600). Logs can contain secrets, are unencrypted, and never belong in Git/Obsidian. Metadata contains no commands/prompts/source. Gain records add fixed filter labels, estimates and the Pi workspace path to RTK's normal database (`RTK_DB_PATH`, then `[tracking].database_path`, then the platform default). RTK initializes its own schema; `tracking.enabled=false` disables the bridge. Config is cached until `/reload`. Storage failures keep reductions working and warn once per session. Stop Pi before deleting state.
 
 Pi/terminal share `~/.local/bin/rtk`. [Updates](../../../skills/pi-maintenance/SKILL.md). Tests: `node --test tests/pi-efficiency*.test.mjs`; `PI_RTK_LIVE=1` also runs real RTK fixtures.

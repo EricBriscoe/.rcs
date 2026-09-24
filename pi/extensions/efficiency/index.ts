@@ -2,7 +2,9 @@ import { getAgentDir, type ExtensionAPI, type ExtensionContext, type ToolResultE
 import { rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { effectiveRtk } from "./runtime.mjs";
+import { gainRecorder } from "./gain.ts";
 import { filterFor, groupedGrep, quietTests, runFilter, saveRaw, originalOutput, sessionKey } from "./output.ts";
 import { privateDirectory, recordUsage, recordOutput, usageReport, formatReport } from "./usage.ts";
 import { fingerprintRequest, diagnoseCacheDrop, isCacheDrop, type RequestFingerprint } from "./cache.ts";
@@ -14,7 +16,17 @@ import { readFileSync } from "node:fs";
 export default function (pi: ExtensionAPI) {
   const agent = getAgentDir(), abort = new AbortController(), pending = new Set<Promise<any>>();
   const owner = (ctx: ExtensionContext) => ctx.sessionManager.getSessionId();
-  let enabled = process.env.RTK_DISABLED !== "1", binary: string | undefined;
+  let enabled = process.env.RTK_DISABLED !== "1", binary: string | undefined, gainWarned = false;
+  const rtkBinary = () => {
+    if (!binary) {
+      const checkout = join(dirname(realpathSync(fileURLToPath(import.meta.url))), "../../..");
+      const pins = effectiveRtk(checkout, agent);
+      if (!/^\d+\.\d+\.\d+$/.test(pins.version)) throw Error("Invalid RTK version");
+      binary = join(agent, "tooling", "rtk", pins.version, "rtk");
+    }
+    return binary;
+  };
+  const recordGain = gainRecorder(rtkBinary);
   async function reduce(event: any, ctx: ExtensionContext): Promise<Pick<ToolResultEvent, "content" | "details"> | undefined> {
     const before = event.content.filter((p: any) => p.type === "text").map((p: any) => p.text).join("\n");
     let shown = before, filter = "raw";
@@ -39,13 +51,7 @@ export default function (pi: ExtensionAPI) {
             compact = groupedGrep(original.raw);
             filter = "grouped-grep";
           } else {
-            if (!binary) {
-              const source = dirname(realpathSync(join(agent, "settings.json")));
-              const pins = effectiveRtk(dirname(source), agent);
-              if (!/^\d+\.\d+\.\d+$/.test(pins.version)) return;
-              binary = join(agent, "tooling", "rtk", pins.version, "rtk");
-            }
-            compact = await runFilter(binary, chosen, original.raw, join(agent, "efficiency", "rtk-home"), abort.signal);
+            compact = await runFilter(rtkBinary(), chosen, original.raw, join(agent, "efficiency", "rtk-home"), abort.signal);
             filter = `rtk:${chosen}`;
           }
         }
@@ -58,6 +64,14 @@ export default function (pi: ExtensionAPI) {
       const path = await saveRaw(directory, original.raw);
       shown = `${compact}\n[Reduced: ${filter}. Raw output: ${path}]`;
       if (Buffer.byteLength(shown) >= Buffer.byteLength(before) || abort.signal.aborted) { await rm(path).catch(() => {}); shown = before; filter = "raw"; return; }
+      const tracked = await recordGain(filter, Buffer.byteLength(before), Buffer.byteLength(shown), ctx.cwd, abort.signal);
+      if (!tracked && !gainWarned && !abort.signal.aborted) {
+        gainWarned = true;
+        try {
+          pi.appendEntry("rtk-gain-unavailable", { filter });
+          if (ctx.hasUI) ctx.ui.notify("RTK gain tracking unavailable; reductions still work. Check RTK config/database access, then /reload.", "warning");
+        } catch { /* Diagnostics must not discard a successful reduction either. */ }
+      }
       return { content: [{ type: "text", text: shown }], details: { ...event.details, fullOutputPath: path, reduction: filter } };
     } catch { shown = before; filter = "raw"; } // Never rerun the original command.
     finally { recordOutput(agent, owner(ctx), shown === before ? "raw" : filter, Buffer.byteLength(before), Buffer.byteLength(shown)); }
