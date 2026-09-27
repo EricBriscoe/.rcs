@@ -1,6 +1,6 @@
 # Subagents
 
-Stock [pi-subagents](https://github.com/nicobailon/pi-subagents), unversioned and launch-updated. No custom coordinator or wrapper. `pi/settings.json` routes roles by cost on the Codex subscription: `scout`/`researcher` on Luna, everything else on Sol at medium thinking, and `reviewer`/`oracle` inherit the parent model (Astra). No model allowlist; per-run `[model=…]` overrides still work. `pi --list-models openai` lists candidates, not guaranteed entitlement.
+Stock [pi-subagents](https://github.com/nicobailon/pi-subagents), unversioned and launch-updated. No custom coordinator or wrapper. Role models live in `pi/settings.json`. No model allowlist; per-run `[model=…]` overrides still work. `pi --list-models openai` lists candidates, not guaranteed entitlement.
 
 - `/subagents-guide`: installed-version docs/workflows.
 - `/subagents-fleet`: inspect, steer, stop children.
@@ -9,7 +9,7 @@ Stock [pi-subagents](https://github.com/nicobailon/pi-subagents), unversioned an
 
 ## Long-running work
 
-Setup links `pi/subagents.json` to `<agentDir>/extensions/subagent/config.json`: 72-hour child defaults, 1,024 admissions/run, unlimited session admissions. Concurrency stays 20; advisory inactivity/active-tool notices use 15/30 minutes.
+Setup links `pi/subagents.json` to `<agentDir>/extensions/subagent/config.json` (deadlines, admissions, concurrency, notices).
 
 - Omit overall async workflow deadlines. For massive tasks, set `timeoutMs: 259200000` on each new `runs.run`/`runs.all` child to override shorter profiles; pass this guidance to nested delegates. Avoid hard tool/tight usage budgets for writers. Explicit deadlines remain coordinator decisions.
 - Steer with `mode: "follow_up"` (queued) or `mode: "auto"` / `steeringRecovery: false` (no automatic pause-and-revive). Check acknowledgments. Before deliberate interruption, request a checkpoint after tool completion: changed files, validation, remaining work.
